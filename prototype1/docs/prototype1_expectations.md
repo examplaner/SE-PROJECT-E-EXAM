@@ -57,7 +57,7 @@ That's all. No website, no reports, no menus.
 
 ## 4. Instructions for the AI
 
-When a teammate starts (step 0 in `prototype1_model_spec.md` §14), asks what prototype1 is, or takes up the rundown offered at the start of a conversation (`repo_instructions.md` §1), explain this file before any code.
+When a teammate starts (step 0 in `prototype1_model_spec.md` §14), asks what prototype1 is, or takes up the rundown offered at the start of a conversation (`agents/repo_rules.md` §1), explain this file before any code.
 
 1. **Start with one sentence:** "Ishan wants a simple command-line tool. You give it an input folder with the exam data, and it gives you back an output folder with the exam plan. That's it."
 2. **Then the data, in one or two sentences:** "He wants the data to be made up but realistic, with one big program, papers shared between years under different codes, and only just enough rooms and teachers, so that it actually tests the tool. Designing it is the team's job."

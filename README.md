@@ -24,10 +24,12 @@ Each pair splits its own work.
 
 | Folder | Contents |
 |---|---|
-| `prototype1/` | First working version. In progress. |
+| `prototype1/` | First working version: input folder in, exam plan out. |
+| `prototype2/` | Terminal app: pick the inputs and dates, then make the plan. |
+| `agents/` | Rules for everyone working here, people and AI assistants, and optional skills. |
 | `docs/` | Submitted project plan and the list of decisions. |
 | `archive/` | Earlier attempts. Reference only. |
 
 ## Contributing
 
-Read [`repo_instructions.md`](repo_instructions.md) first.
+Read [`agents/README.md`](agents/README.md) first. The rules are in `agents/repo_rules.md` and `agents/this_repo.md`.

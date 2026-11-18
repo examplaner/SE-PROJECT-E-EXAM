@@ -250,7 +250,7 @@ same_paper:              # Decided. Codes that are one question paper.
 
 ## 14. Build steps
 
-Steps are best done one at a time, at your own pace. Before a step, the AI lists what it will change and asks you to confirm. After it, the AI suggests the check below (`repo_instructions.md` §2 and §4).
+Steps are best done one at a time, at your own pace. Before a step, the AI lists what it will change and asks you to confirm. After it, the AI suggests the check below (`agents/repo_rules.md` §2 and §4).
 
 | # | Step | Check |
 |---|---|---|
