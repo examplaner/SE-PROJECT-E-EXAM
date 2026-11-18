@@ -1,136 +1,41 @@
-"""Prototype1 exam planner: command line entry point (model spec section 4).
+"""Turn an input folder into an exam plan (model spec section 4).
 
-Run from prototype1/:
+    python main.py data/tiny [--output output]
 
-    python main.py data/tiny
-
-Exit codes (model spec section 4):
-    0  a plan was written: schedule.csv, the room CSVs, duties.csv and
-       basis.txt (on what basis the plan was made) and terms.md (what
-       the words mean)
+Exit codes:
+    0  a plan was written: schedule.csv, the room CSVs, duties.csv, basis.txt
+       and terms.md, in a new folder named by the time of the run
     1  the input is invalid; every problem is printed
     2  no plan is possible; the reason is printed and written to why.txt,
-       the only file in the new output folder (model spec section 12)
-
-Built so far: step 3 (load and validate), step 4 (schedule), step 5
-(seat), step 6 (duties) and step 7 (no plan: why.txt).
+       the only file in the new folder
 """
 
 import argparse
-import csv
-import datetime
-import shutil
 import sys
-from pathlib import Path
 
 import duties
 import loader
 import schedule
 import seat
 import validate
+import writer
 from errors import NoPlan
-
-SCHEDULE_COLUMNS = ["date", "session", "paper_id", "course_codes", "students"]
-# The page that explains the words of the plan (Krish, 2026-11-10). Each plan
-# folder gets a copy, so whoever gets the folder can read it.
-TERMS_FILE = Path(__file__).resolve().parent / "docs" / "terms.md"
-TERMS_LINE = ("If a word in these lines is not clear, read terms.md in the "
-              "plan folder.")
-DUTY_COLUMNS = ["date", "session", "room_id", "teacher_id"]
-
-
-def summary(data):
-    """One line with the sizes of a valid input folder."""
-    groups = data["constraints"].get("same_paper") or []
-    papers = len(data["courses"]) - sum(len(group) - 1 for group in groups)
-    return (f"Input OK: {len(data['sections'])} sections, "
-            f"{len(data['students'])} students, "
-            f"{len(data['courses'])} course codes ({papers} papers), "
-            f"{len(data['rooms'])} rooms, {len(data['teachers'])} teachers.")
-
-
-def make_output_folder(output_root):
-    """A new folder named by the time of the run (model spec section 11).
-    If two runs start in the same second, the second one gets _2, _3, ..."""
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    folder = Path(output_root) / stamp
-    number = 2
-    while folder.exists():
-        folder = Path(output_root) / f"{stamp}_{number}"
-        number += 1
-    folder.mkdir(parents=True)
-    return folder
-
-
-def write_why(reason, output_root):
-    """No plan (model spec section 12): print the reason and write the same
-    text to why.txt in a new timestamped folder. Nothing else is written,
-    so there is never a half plan. Returns exit code 2."""
-    folder = make_output_folder(output_root)
-    (folder / "why.txt").write_text(reason + "\n", encoding="utf-8")
-    print(reason)
-    print(f"Wrote {folder / 'why.txt'}")
-    return 2
-
-
-def write_schedule(placements, path):
-    """schedule.csv: one row per paper. Course codes of one paper are joined
-    with ';' so the cell needs no quotes."""
-    with open(path, "w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow(SCHEDULE_COLUMNS)
-        for placement in placements:
-            paper = placement.paper
-            writer.writerow([placement.date.isoformat(), placement.session,
-                             paper.paper_id, ";".join(paper.course_codes),
-                             len(paper.students)])
-
-
-def write_seating(seating, folder):
-    """One CSV per room in use per slot (model spec section 11):
-    daywise_seating_plans/<date>/<session>/<room_id>.csv. No header row:
-    each CSV row is a row of seats, front first. Returns the file count."""
-    count = 0
-    for (day, session), room_plans in seating.items():
-        slot_folder = folder / "daywise_seating_plans" / day.isoformat() / session
-        slot_folder.mkdir(parents=True, exist_ok=True)
-        for room_plan in room_plans:
-            path = slot_folder / f"{room_plan.room_id}.csv"
-            with open(path, "w", newline="", encoding="utf-8") as file:
-                writer = csv.writer(file)
-                for row in room_plan.grid:
-                    writer.writerow([seat.cell_text(cell) for cell in row])
-            count += 1
-    return count
-
-
-def write_duties(rows, path):
-    """duties.csv: one row per teacher per room per slot (model spec
-    section 11)."""
-    with open(path, "w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow(DUTY_COLUMNS)
-        for day, session, room_id, teacher_id in rows:
-            writer.writerow([day.isoformat(), session, room_id, teacher_id])
+from exam import build_exam
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Turn an input folder into an exam plan.")
+    parser = argparse.ArgumentParser(description="Turn an input folder into an exam plan.")
     parser.add_argument("input_dir", help="folder with the input files")
     parser.add_argument("--output", default="output",
                         help="where plan folders go (default: output/)")
     args = parser.parse_args(argv)
 
-    # Stage 1: are the files there and readable?
     problems = validate.check_folder(args.input_dir)
     if problems:
         print(validate.format_report(problems))
         print("\nFix these first. The checks on the data inside the files "
               "run once every file can be read.")
         return 1
-
-    # Stage 2: is the data inside the files right?
     data = loader.load(loader.input_paths(args.input_dir))
     problems = validate.check_data(data)
     if problems:
@@ -138,67 +43,71 @@ def main(argv=None):
         return 1
     print(summary(data))
 
-    # Steps 4, 5 and 6 all run before anything is written. If any of them
-    # finds that no plan is possible, the reason goes to why.txt.
+    # steps 4, 5 and 6 all run before anything is written
+    exam = build_exam(data)
     try:
-        # Step 4: papers to dates and sessions.
-        report = {}
-        placements = schedule.make_schedule(data, report)
+        placements, way, failed = schedule.make_schedule(exam)
         if not placements:
-            # Backup: validation already stops an empty courses.csv.
+            # only an input with no students at all gets here
             raise NoPlan("No plan possible.\n"
                          "Rule: papers\n"
-                         "courses.csv has no course codes, so there is "
-                         "nothing to schedule.")
-
-        # Step 5: students to seats.
-        seating = seat.make_seating(placements, data["rooms"],
-                                    duties.section_of_student(data),
-                                    schedule.room_check_for(data))
-
-        # Step 6: teachers to rooms.
-        duty_rows = duties.make_duties(seating, data,
-                                       schedule.build_papers(data))
+                         "courses.csv has no course codes, so there is nothing to schedule.")
+        seating = seat.make_seating(placements, exam)
+        duty_rows = duties.make_duties(seating, exam)
     except NoPlan as reason:
-        return write_why(str(reason), args.output)
+        folder = writer.new_plan_folder(args.output)
+        path = writer.write_why(str(reason), folder)
+        print(reason)
+        print(f"Wrote {path}")
+        return 2
 
-    folder = make_output_folder(args.output)
-    write_schedule(placements, folder / "schedule.csv")
-    room_files = write_seating(seating, folder)
-    write_duties(duty_rows, folder / "duties.csv")
-
-    # On what basis the plan was made: on the screen and in basis.txt, so
-    # the people who get the folder can read it too (Krish, 2026-11-10).
-    basis = [schedule.basis_line(report), seat.basis_line(seating)]
-    if TERMS_FILE.is_file():
-        shutil.copyfile(TERMS_FILE, folder / "terms.md")
-        basis.append(TERMS_LINE)
-    (folder / "basis.txt").write_text("\n".join(basis) + "\n",
-                                      encoding="utf-8")
-    for line in basis:
+    folder = writer.new_plan_folder(args.output)
+    writer.write_schedule(placements, folder / "schedule.csv")
+    room_files = writer.write_seating(seating, folder)
+    writer.write_duties(duty_rows, folder / "duties.csv")
+    basis = [schedule.basis_line(way, failed), seat.basis_line(seating)]
+    for line in writer.write_basis(basis, folder):
         print(line)
-
-    days = sorted({placement.date for placement in placements})
-    print(f"Scheduled {len(placements)} papers on {len(days)} days, "
-          f"{days[0]} to {days[-1]}.")
-    fullest = schedule.fullest_session(placements, data)
-    if fullest:
-        day, session, students, seat_limit = fullest
-        print(f"Fullest session: {day} {session}, {students} of {seat_limit} "
-              f"seats ({seat_limit - students} left).")
-    busiest = max(seating.items(), key=lambda item: len(item[1]))
-    two_paper = sum(1 for plans in seating.values()
-                    for plan in plans if len(plan.papers) == 2)
-    print(f"Seating: {room_files} room files ({two_paper} with two papers). "
-          f"Most rooms in one slot: {len(busiest[1])} of {len(data['rooms'])}"
-          f" ({busiest[0][0]} {busiest[0][1]}).")
-    numbers = duties.duty_summary(duty_rows, data)
-    print(f"Duties: {len(duty_rows)}. Each regular teacher has "
-          f"{numbers['fewest']} to {numbers['most']}; PhD scholars have "
-          f"{numbers['phd_duties']}. Teachers with both shifts on one day: "
-          f"{numbers['double_days']} times.")
+    print_numbers(placements, seating, duty_rows, room_files, exam)
     print(f"Wrote {folder}")
     return 0
+
+
+def summary(data):
+    """One line with the sizes of a valid input."""
+    groups = data["constraints"].get("same_paper") or []
+    papers = len(data["courses"])
+    for group in groups:
+        papers -= len(group) - 1
+    return (f"Input OK: {len(data['sections'])} sections, "
+            f"{len(data['students'])} students, "
+            f"{len(data['courses'])} course codes ({papers} papers), "
+            f"{len(data['rooms'])} rooms, {len(data['teachers'])} teachers.")
+
+
+def print_numbers(placements, seating, duty_rows, room_files, exam):
+    """How full the plan is: days, the fullest session, rooms and duties."""
+    days = sorted({placement.date for placement in placements})
+    print(f"Scheduled {len(placements)} papers on {len(days)} days, {days[0]} to {days[-1]}.")
+
+    day, session, students, limit = schedule.fullest_session(placements, exam)
+    print(f"Fullest session: {day} {session}, {students} of {limit} seats "
+          f"({limit - students} left).")
+
+    (busiest_day, busiest_session), busiest_plans = max(seating.items(),
+                                                        key=lambda item: len(item[1]))
+    two_paper = 0
+    for plans in seating.values():
+        for plan in plans:
+            if len(plan.papers) == 2:
+                two_paper += 1
+    print(f"Seating: {room_files} room files ({two_paper} with two papers). Most rooms in "
+          f"one slot: {len(busiest_plans)} of {len(exam.rooms)} ({busiest_day} {busiest_session}).")
+
+    numbers = duties.duty_summary(duty_rows, exam)
+    print(f"Duties: {len(duty_rows)}. Each regular teacher has {numbers['fewest']} to "
+          f"{numbers['most']}; PhD scholars have {numbers['phd_duties']}. Teachers with "
+          f"both shifts on one day: {numbers['double_days']} times.")
 
 
 if __name__ == "__main__":
