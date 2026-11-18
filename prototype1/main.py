@@ -94,15 +94,17 @@ def print_numbers(placements, seating, duty_rows, room_files, exam):
     print(f"Fullest session: {day} {session}, {students} of {limit} seats "
           f"({limit - students} left).")
 
-    (busiest_day, busiest_session), busiest_plans = max(seating.items(),
-                                                        key=lambda item: len(item[1]))
-    two_paper = 0
-    for plans in seating.values():
-        for plan in plans:
-            if len(plan.papers) == 2:
-                two_paper += 1
-    print(f"Seating: {room_files} room files ({two_paper} with two papers). Most rooms in "
-          f"one slot: {len(busiest_plans)} of {len(exam.rooms)} ({busiest_day} {busiest_session}).")
+    # the first slot with the most rooms
+    busiest_slot = None
+    busiest_rooms = 0
+    for slot, plans in seating.items():
+        if busiest_slot is None or len(plans) > busiest_rooms:
+            busiest_slot = slot
+            busiest_rooms = len(plans)
+    day, session = busiest_slot
+    print(f"Seating: {room_files} room files ({seat.two_paper_rooms(seating)} with two "
+          f"papers). Most rooms in one slot: {busiest_rooms} of {len(exam.rooms)} "
+          f"({day} {session}).")
 
     numbers = duties.duty_summary(duty_rows, exam)
     print(f"Duties: {len(duty_rows)}. Each regular teacher has {numbers['fewest']} to "

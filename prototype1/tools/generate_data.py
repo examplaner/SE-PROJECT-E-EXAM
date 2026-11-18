@@ -106,7 +106,7 @@ SUBJECTS = {
 }
 
 
-def cohort(cohort_id, program, year, sections, cores, electives=None, electives_per_student=0):
+def make_cohort(cohort_id, program, year, sections, cores, electives=None, electives_per_student=0):
     """One cohort's design. electives: subject key -> number of students."""
     return {
         "id": cohort_id,
@@ -125,26 +125,26 @@ MAIN = {
     "name": "main",
     "section_size": 50,
     "cohorts": [
-        cohort("BT2CSE", "BTECH", 2, 7, BT2_COMMON + ["dsa", "web", "dld", "oops"],
+        make_cohort("BT2CSE", "BTECH", 2, 7, BT2_COMMON + ["dsa", "web", "dld", "oops"],
                {"dm_bt2": 150, "semi_phy": 90, "quantum": 70, "modeling_life": 40}, 1),
-        cohort("BT2ECOM", "BTECH", 2, 1,
+        make_cohort("BT2ECOM", "BTECH", 2, 1,
                BT2_COMMON + ["dsa", "web", "dld", "sigsys", "sensors_iot"]),
-        cohort("BT2ME", "BTECH", 2, 1,
+        make_cohort("BT2ME", "BTECH", 2, 1,
                BT2_COMMON + ["robotics_iot", "thermo", "eng_materials", "sensors_iot"]),
-        cohort("BT3CSE", "BTECH", 3, 7, ["ml", "coa", "ai", "iot", "coding_skills", "dm_bt3"],
+        make_cohort("BT3CSE", "BTECH", 3, 7, ["ml", "coa", "ai", "iot", "coding_skills", "dm_bt3"],
                {"ads": 160, "big_data": 70, "cedha": 50, "sad": 40, "applied_db": 30}, 1),
-        cohort("BT3ECOM", "BTECH", 3, 1, ["ml", "coa", "mpmc", "vlsi", "coding_skills"],
+        make_cohort("BT3ECOM", "BTECH", 3, 1, ["ml", "coa", "mpmc", "vlsi", "coding_skills"],
                {"ads": 50}, 1),
-        cohort("BT4CSE", "BTECH", 4, 7, [],
+        make_cohort("BT4CSE", "BTECH", 4, 7, [],
                {"agentic_ai": 200, "nlp": 150, "idt": 120, "cyber_forensics": 90,
                 "sad": 80, "sds": 60}, 2),
-        cohort("BT4ECOM", "BTECH", 4, 1, ["compiler", "big_data"],
+        make_cohort("BT4ECOM", "BTECH", 4, 1, ["compiler", "big_data"],
                {"agentic_ai": 30, "nlp": 25, "idt": 20, "cad_vlsi": 15, "sdm": 10}, 2),
-        cohort("BT4ME", "BTECH", 4, 1, ["plc", "adv_mfg"],
+        make_cohort("BT4ME", "BTECH", 4, 1, ["plc", "adv_mfg"],
                {"ev": 35, "vehicle_dyn": 25, "cfd": 25, "composites": 15}, 2),
-        cohort("BB2", "BBA", 2, 3, ["macroecon", "bus_stat", "bus_comm"],
+        make_cohort("BB2", "BBA", 2, 3, ["macroecon", "bus_stat", "bus_comm"],
                {"finance": 55, "marketing": 55, "design_thinking": 40}, 1),
-        cohort("BB3", "BBA", 3, 3, ["bus_law", "strat_mgmt", "ops_mgmt", "happiness"],
+        make_cohort("BB3", "BBA", 3, 3, ["bus_law", "strat_mgmt", "ops_mgmt", "happiness"],
                {"bim": 50, "ethics": 50, "org_beh": 50}, 1),
     ],
     "rooms": {"S": 18, "M": 18},
@@ -170,8 +170,8 @@ TINY = {
     "name": "tiny",
     "section_size": 8,
     "cohorts": [
-        cohort("BT2CSE", "BTECH", 2, 1, ["dsa", "oops"], {"dm_bt2": 5, "semi_phy": 3}, 1),
-        cohort("BT2ECOM", "BTECH", 2, 1, ["dsa", "sigsys"],
+        make_cohort("BT2CSE", "BTECH", 2, 1, ["dsa", "oops"], {"dm_bt2": 5, "semi_phy": 3}, 1),
+        make_cohort("BT2ECOM", "BTECH", 2, 1, ["dsa", "sigsys"],
                {"quantum": 5, "modeling_life": 3}, 1),
     ],
     "rooms": {"S": 2, "M": 1},
@@ -227,12 +227,12 @@ def build_dataset(design, out_dir):
 
     # every core, plus the electives handed out
     registrations = []
-    for c in design["cohorts"]:
-        chosen = allocate_electives(c["id"], students_by_cohort[c["id"]], c["electives"],
-                                    c["electives_per_student"], rng)
-        for student in students_by_cohort[c["id"]]:
-            for subject in c["cores"] + chosen[student]:
-                registrations.append((student, codes[(c["id"], subject)]))
+    for cohort in design["cohorts"]:
+        chosen = allocate_electives(cohort["id"], students_by_cohort[cohort["id"]], cohort["electives"],
+                                    cohort["electives_per_student"], rng)
+        for student in students_by_cohort[cohort["id"]]:
+            for subject in cohort["cores"] + chosen[student]:
+                registrations.append((student, codes[(cohort["id"], subject)]))
 
     groups = make_teaching_groups(design, codes, registrations, students_by_section)
     teachers = make_teachers(design)
@@ -264,20 +264,20 @@ def make_sections_and_students(design):
     section_rows = []
     students_by_section = {}
     students_by_cohort = {}
-    for c in design["cohorts"]:
-        if c["sections"] > len(ROMAN):
-            raise DesignError(f"{c['id']}: more than {len(ROMAN)} sections")
+    for cohort in design["cohorts"]:
+        if cohort["sections"] > len(ROMAN):
+            raise DesignError(f"{cohort['id']}: more than {len(ROMAN)} sections")
         number = 1
-        students_by_cohort[c["id"]] = []
-        for index in range(c["sections"]):
-            section_id = f"{c['id']}_{ROMAN[index]}"
-            section_rows.append([section_id, c["id"], c["program"], c["year"]])
+        students_by_cohort[cohort["id"]] = []
+        for index in range(cohort["sections"]):
+            section_id = f"{cohort['id']}_{ROMAN[index]}"
+            section_rows.append([section_id, cohort["id"], cohort["program"], cohort["year"]])
             members = []
             for _ in range(design["section_size"]):
-                members.append(f"{c['id']}{number:04d}")
+                members.append(f"{cohort['id']}{number:04d}")
                 number += 1
             students_by_section[section_id] = members
-            students_by_cohort[c["id"]].extend(members)
+            students_by_cohort[cohort["id"]].extend(members)
     return section_rows, students_by_section, students_by_cohort
 
 
@@ -322,24 +322,24 @@ def make_course_codes(design):
     subject in two cohorts gets two codes."""
     counters = {}
     codes = {}
-    for c in design["cohorts"]:
-        for subject in c["cores"] + list(c["electives"]):
+    for cohort in design["cohorts"]:
+        for subject in cohort["cores"] + list(cohort["electives"]):
             if subject not in SUBJECTS:
-                raise DesignError(f"{c['id']}: unknown subject {subject}")
-            if (c["id"], subject) in codes:
-                raise DesignError(f"{c['id']}: subject {subject} listed twice")
+                raise DesignError(f"{cohort['id']}: unknown subject {subject}")
+            if (cohort["id"], subject) in codes:
+                raise DesignError(f"{cohort['id']}: subject {subject} listed twice")
             department = SUBJECTS[subject][1]
-            key = (department, c["year"])
+            key = (department, cohort["year"])
             counters[key] = counters.get(key, 0) + 1
-            codes[(c["id"], subject)] = f"{department}{c['year']}{counters[key]:03d}"
+            codes[(cohort["id"], subject)] = f"{department}{cohort['year']}{counters[key]:03d}"
     return codes
 
 
 def subjects_in_order(design):
     """Every subject used, in the order it first appears in the design."""
     seen = []
-    for c in design["cohorts"]:
-        for subject in c["cores"] + list(c["electives"]):
+    for cohort in design["cohorts"]:
+        for subject in cohort["cores"] + list(cohort["electives"]):
             if subject not in seen:
                 seen.append(subject)
     return seen
@@ -377,11 +377,11 @@ def make_teaching_groups(design, codes, registrations, students_by_section):
     paper (any of its codes is an elective) gets 2 groups if it has
     big_elective_size students or more in total, otherwise 1."""
     kind_of = {}
-    for c in design["cohorts"]:
-        for subject in c["cores"]:
-            kind_of[(c["id"], subject)] = "CORE"
-        for subject in c["electives"]:
-            kind_of[(c["id"], subject)] = "ELECTIVE"
+    for cohort in design["cohorts"]:
+        for subject in cohort["cores"]:
+            kind_of[(cohort["id"], subject)] = "CORE"
+        for subject in cohort["electives"]:
+            kind_of[(cohort["id"], subject)] = "ELECTIVE"
 
     registered = set(registrations)
     groups = []
@@ -446,11 +446,11 @@ def assign_teachers(groups, teachers, rng):
     rng.shuffle(order)
     assigned = []
     for subject, sections in order:
-        candidates = [t for t in faculty if subject not in papers_of[t]]
+        candidates = [teacher_id for teacher_id in faculty if subject not in papers_of[teacher_id]]
         if not candidates:
             raise DesignError(f"not enough teachers for paper {subject}")
         # min() keeps the first teacher on a tie
-        teacher = min(candidates, key=lambda t: load[t])
+        teacher = min(candidates, key=lambda teacher_id: load[teacher_id])
         load[teacher] += 1
         papers_of[teacher].add(subject)
         assigned.append((teacher, subject, sections))
@@ -464,6 +464,7 @@ def make_teaching_rows(assigned, codes, registrations, students_by_section):
     rows = []
     for teacher, subject, sections in assigned:
         for section_id in sections:
+            # BT2CSE_I -> BT2CSE
             cohort_id = section_id.rsplit("_", 1)[0]
             code = codes[(cohort_id, subject)]
             for student in students_by_section[section_id]:
@@ -476,11 +477,11 @@ def make_teaching_rows(assigned, codes, registrations, students_by_section):
 
 def make_course_rows(design, codes):
     rows = []
-    for c in design["cohorts"]:
-        for subject in c["cores"]:
-            rows.append([codes[(c["id"], subject)], SUBJECTS[subject][0], c["id"], "CORE"])
-        for subject in c["electives"]:
-            rows.append([codes[(c["id"], subject)], SUBJECTS[subject][0], c["id"], "ELECTIVE"])
+    for cohort in design["cohorts"]:
+        for subject in cohort["cores"]:
+            rows.append([codes[(cohort["id"], subject)], SUBJECTS[subject][0], cohort["id"], "CORE"])
+        for subject in cohort["electives"]:
+            rows.append([codes[(cohort["id"], subject)], SUBJECTS[subject][0], cohort["id"], "ELECTIVE"])
     return rows
 
 
@@ -533,7 +534,7 @@ def print_summary(design, codes, registrations, assigned, teachers):
     for teacher, subject, _ in assigned:
         teachers_per_subject.setdefault(subject, []).append(teacher)
 
-    total_students = sum(c["sections"] for c in design["cohorts"]) * design["section_size"]
+    total_students = sum(cohort["sections"] for cohort in design["cohorts"]) * design["section_size"]
     print(f"  {total_students} students, {len(codes)} course codes, "
           f"{len(subjects_in_order(design))} papers, {len(teachers)} teachers")
     print(f"  {'paper':<40} {'students':>8}  teachers  codes")
@@ -552,7 +553,10 @@ def print_summary(design, codes, registrations, assigned, teachers):
         if rank != "PHD":
             groups = load.get(teacher_id, 0)
             counts[groups] = counts.get(groups, 0) + 1
-    spread = ", ".join(f"{n} teach {k} paper group(s)" for k, n in sorted(counts.items()))
+    parts = []
+    for groups, teachers_with_that_many in sorted(counts.items()):
+        parts.append(f"{teachers_with_that_many} teach {groups} paper group(s)")
+    spread = ", ".join(parts)
     print(f"  teaching load (non-PhD): {spread}")
 
 

@@ -53,6 +53,16 @@ def rooms_for_paper(paper_id, teaches, plans, contents):
     return without_paper
 
 
+def papers_taught(teaches, paper_ids):
+    """The papers among paper_ids that the teacher teaches, sorted.
+    teaches: the teacher's set of (paper_id, section_id)."""
+    taught = set()
+    for paper_id, _ in teaches:
+        if paper_id in paper_ids:
+            taught.add(paper_id)
+    return sorted(taught)
+
+
 def teachers_without_room(papers, plans, exam):
     """Check one slot: papers are the Papers written in it, plans its
     RoomPlans. Returns (teacher_id, paper_id) for every teacher, not a PhD
@@ -64,8 +74,7 @@ def teachers_without_room(papers, plans, exam):
         if exam.rank_of[teacher_id] == PHD:
             continue
         teaches = exam.teaching[teacher_id]
-        own_papers = {paper_id for paper_id, _ in teaches} & in_slot
-        for paper_id in sorted(own_papers):
+        for paper_id in papers_taught(teaches, in_slot):
             if not rooms_for_paper(paper_id, teaches, plans, contents):
                 missing.append((teacher_id, paper_id))
     return missing
@@ -79,8 +88,15 @@ def make_duties(seating, exam):
 
     Slots go in date order, first session first, so "fewest duties so far"
     and "a duty already that day" count the slots before."""
-    regulars = sorted(t for t, rank in exam.rank_of.items() if rank != PHD)
-    phds = sorted(t for t, rank in exam.rank_of.items() if rank == PHD)
+    regulars = []
+    phds = []
+    for teacher_id, rank in exam.rank_of.items():
+        if rank == PHD:
+            phds.append(teacher_id)
+        else:
+            regulars.append(teacher_id)
+    regulars.sort()
+    phds.sort()
     counts = {}
     for teacher_id in regulars + phds:
         counts[teacher_id] = 0
@@ -103,39 +119,26 @@ def make_duties(seating, exam):
 def staff_slot(day, session, plans, exam, regulars, phds, counts, days_worked):
     """Fill every room of one slot with exam.per_room teachers. Returns
     {room_id: [teacher_id, ...]} in rooms.csv order."""
-    contents = room_contents(plans, exam.section_of)
-
-    # teacher -> the rooms they may sit in this slot; for a teacher with a
-    # paper here, only the rooms that count as their own-paper duty
-    may_sit = {}
-    own_paper = {}
-    for teacher_id in regulars + phds:
-        teaches = exam.teaching.get(teacher_id, set())
-        rooms = None
-        if teacher_id in regulars:
-            rooms = own_paper_rooms(teacher_id, teaches, plans, contents, day, session)
-        if rooms is not None:
-            own_paper[teacher_id] = rooms
-            may_sit[teacher_id] = rooms
-        else:
-            may_sit[teacher_id] = {room_id for room_id, inside in contents.items()
-                                   if not inside & teaches}
-
+    may_sit, own_paper = rooms_teachers_may_sit(day, session, plans, exam, regulars, phds)
     teachers_in = {}
     for plan in plans:
         teachers_in[plan.room_id] = []
 
     # 1. own-paper duties, the teachers with the fewest rooms first
-    for teacher_id in sorted(own_paper, key=lambda t: (len(own_paper[t]), t)):
+    for teacher_id in sorted(own_paper, key=lambda teacher_id: (len(own_paper[teacher_id]),
+                                                                teacher_id)):
         if not place_teacher(teacher_id, teachers_in, exam.per_room, may_sit, set()):
-            rooms = ", ".join(r for r in teachers_in if r in own_paper[teacher_id])
+            rooms = []
+            for room_id in teachers_in:
+                if room_id in own_paper[teacher_id]:
+                    rooms.append(room_id)
             raise no_plan("duty room", day, session,
                           f"{teacher_id} needs a duty for their own paper in one of these "
-                          f"rooms: {rooms}. They are full of other teachers who can't sit "
-                          f"anywhere else.")
+                          f"rooms: {', '.join(rooms)}. They are full of other teachers who "
+                          f"can't sit anywhere else.")
 
     # 2. every other place: regular teachers best first, PhD scholars last
-    others = [t for t in regulars if t not in own_paper]
+    others = [teacher_id for teacher_id in regulars if teacher_id not in own_paper]
     order = best_first(others, day, counts, days_worked) + best_first(phds, day, counts, days_worked)
     for teacher_id in order:
         if all_full(teachers_in, exam.per_room):
@@ -143,18 +146,48 @@ def staff_slot(day, session, plans, exam, regulars, phds, counts, days_worked):
         place_teacher(teacher_id, teachers_in, exam.per_room, may_sit, set())
 
     if not all_full(teachers_in, exam.per_room):
-        short = []
-        placed = 0
-        for room_id, teacher_ids in teachers_in.items():
-            placed += len(teacher_ids)
-            if len(teacher_ids) < exam.per_room:
-                short.append(f"{room_id} has {len(teacher_ids)}")
-        raise no_plan("duties", day, session,
-                      f"Every room needs {exam.per_room} teachers. Short: {', '.join(short)}.\n"
-                      f"Needs {exam.per_room * len(plans)} teachers, {placed} could be placed "
-                      f"({len(regulars)} regular teachers, {len(phds)} PhD scholars; nobody "
-                      f"sits with their own students or has two duties in one slot).")
+        raise too_few_teachers(day, session, teachers_in, exam.per_room, regulars, phds)
     return teachers_in
+
+
+def rooms_teachers_may_sit(day, session, plans, exam, regulars, phds):
+    """Returns ({teacher: the rooms they may sit in this slot}, {teacher: the
+    rooms that count as their own-paper duty}). A teacher with a paper here
+    may sit only in those rooms; any other teacher in a room without their
+    own students."""
+    contents = room_contents(plans, exam.section_of)
+    may_sit = {}
+    own_paper = {}
+    for teacher_id in regulars + phds:
+        teaches = exam.teaching.get(teacher_id, set())
+        rooms = None
+        # PhD scholars are exempt from the own-paper duty
+        if teacher_id in regulars:
+            rooms = own_paper_rooms(teacher_id, teaches, plans, contents, day, session)
+        if rooms is not None:
+            own_paper[teacher_id] = rooms
+            may_sit[teacher_id] = rooms
+            continue
+        may_sit[teacher_id] = set()
+        for room_id, inside in contents.items():
+            if not (inside & teaches):
+                may_sit[teacher_id].add(room_id)
+    return may_sit, own_paper
+
+
+def too_few_teachers(day, session, teachers_in, per_room, regulars, phds):
+    """The NoPlan when some room is still short of teachers."""
+    short = []
+    placed = 0
+    for room_id, teacher_ids in teachers_in.items():
+        placed += len(teacher_ids)
+        if len(teacher_ids) < per_room:
+            short.append(f"{room_id} has {len(teacher_ids)}")
+    return no_plan("duties", day, session,
+                   f"Every room needs {per_room} teachers. Short: {', '.join(short)}.\n"
+                   f"Needs {per_room * len(teachers_in)} teachers, {placed} could be placed "
+                   f"({len(regulars)} regular teachers, {len(phds)} PhD scholars; nobody "
+                   f"sits with their own students or has two duties in one slot).")
 
 
 def own_paper_rooms(teacher_id, teaches, plans, contents, day, session):
@@ -165,7 +198,7 @@ def own_paper_rooms(teacher_id, teaches, plans, contents, day, session):
     papers_here = set()
     for plan in plans:
         papers_here.update(plan.papers)
-    own_papers = sorted({paper_id for paper_id, _ in teaches} & papers_here)
+    own_papers = papers_taught(teaches, papers_here)
     if not own_papers:
         return None
 
@@ -226,7 +259,11 @@ def all_full(teachers_in, per_room):
 def best_first(teacher_ids, day, counts, days_worked):
     """Teachers in the order they are picked: no duty yet that day first,
     then the fewest duties so far, then the teacher ID."""
-    return sorted(teacher_ids, key=lambda t: (day in days_worked.get(t, ()), counts[t], t))
+    def order(teacher_id):
+        # False sorts before True, so teachers with no duty that day come first
+        worked_today = day in days_worked.get(teacher_id, set())
+        return (worked_today, counts[teacher_id], teacher_id)
+    return sorted(teacher_ids, key=order)
 
 
 def no_plan(rule, day, session, text):

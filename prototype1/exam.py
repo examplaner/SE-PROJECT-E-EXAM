@@ -5,8 +5,8 @@ import datetime
 from dataclasses import dataclass, field
 
 import loader
+from validate import WEEKDAYS
 
-WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 PHD = "PHD"
 
 
@@ -133,7 +133,7 @@ def exam_days(settings):
     days = []
     day = start
     while day <= end:
-        if WEEKDAY_NAMES[day.weekday()] in settings["exam_weekdays"] and day not in holidays:
+        if WEEKDAYS[day.weekday()] in settings["exam_weekdays"] and day not in holidays:
             days.append(day)
         day += datetime.timedelta(days=1)
     return days

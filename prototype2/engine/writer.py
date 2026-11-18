@@ -80,6 +80,7 @@ def write_basis(lines, folder):
     """basis.txt (on what basis the plan was made) and a copy of terms.md.
     The terms line is added when terms.md is copied. Returns the lines
     written, which main.py also prints."""
+    # a copy, so the caller's list doesn't get the terms line
     lines = list(lines)
     if TERMS_FILE.is_file():
         shutil.copyfile(TERMS_FILE, folder / "terms.md")

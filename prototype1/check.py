@@ -275,14 +275,18 @@ def load_input(paths):
     codes_of_paper = {}
     for course in read_input_table(paths["courses"], ["course_code"]):
         code = course["course_code"]
-        paper_id = paper_of_code.setdefault(code, code)
+        paper_id = paper_of_code.get(code, code)
         codes_of_paper.setdefault(paper_id, []).append(code)
 
     students_of_paper = {paper_id: set() for paper_id in codes_of_paper}
     for row in read_input_table(paths["registrations"], ["student_id", "course_code"]):
-        paper_id = paper_of_code.setdefault(row["course_code"], row["course_code"])
+        code = row["course_code"]
+        paper_id = paper_of_code.get(code, code)
         students_of_paper.setdefault(paper_id, set()).add(row["student_id"])
-        codes_of_paper.setdefault(paper_id, [row["course_code"]])
+        # a registered code missing from courses.csv still counts as a paper,
+        # so its seats are checked too
+        if paper_id not in codes_of_paper:
+            codes_of_paper[paper_id] = [code]
 
     section_of = {}
     for path in sorted(Path(paths["students"]).glob("*.csv")):
@@ -445,7 +449,12 @@ def read_room_file(path, where, size, problems):
         grid.append(grid_row)
     if not good:
         return None
-    if not any(cell for grid_row in grid for cell in grid_row):
+    someone_sits = False
+    for grid_row in grid:
+        for cell in grid_row:
+            if cell:
+                someone_sits = True
+    if not someone_sits:
         problems.add("output files",
                      f"{where}: no student sits here; only rooms in use get a file.")
         return None

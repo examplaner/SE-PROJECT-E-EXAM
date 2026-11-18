@@ -138,10 +138,12 @@ def section_runs(students, section_of):
     """Split students in roll order into runs of one section each."""
     runs = []
     for student in students:
-        if runs and section_of[runs[-1][-1]] == section_of[student]:
-            runs[-1].append(student)
-        else:
-            runs.append([student])
+        if runs:
+            last_student = runs[-1][-1]
+            if section_of[last_student] == section_of[student]:
+                runs[-1].append(student)
+                continue
+        runs.append([student])
     return runs
 
 
@@ -162,7 +164,8 @@ def seat_best_for_teachers(papers, exam):
         if plans is None:
             return None, None
         short = papers_short(papers, plans, exam)
-        if not short or short <= must_split:
+        # done, or splitting more papers can't help
+        if not short or short.issubset(must_split):
             return plans, short
         must_split |= short
 
@@ -207,6 +210,8 @@ def seat_best(papers, exam, must_split):
 
     plans = []
     for (paper_id, students), rooms in zip(groups, rooms_of_group):
+        # seat_room() takes the seated students off the list, so each room
+        # starts where the last one stopped
         for room in rooms:
             plans.append(seat_room(room, [(paper_id, students)]))
     plans.sort(key=lambda plan: position[plan.room_id])
@@ -290,6 +295,8 @@ def seat_in_room_order(papers, exam):
             groups = runs
         else:
             groups = [students]
+        # seat_room() takes the seated students off the group, so each
+        # group ends when its list is empty
         for group in groups:
             while group:
                 plans.append(seat_room(rooms[room_index], [(paper_id, group)]))
@@ -303,7 +310,8 @@ def seat_with_mixing(papers, rooms):
     leftovers = []
     room_index = 0
 
-    # each paper first fills, alone, the rooms it fills completely
+    # each paper first fills, alone, the rooms it fills completely;
+    # seat_room() takes the seated students off its list
     for paper_id, students in paper_queues(papers):
         while room_index < len(rooms) and len(students) >= rooms[room_index].alone_seats():
             plans.append(seat_room(rooms[room_index], [(paper_id, students)]))
@@ -315,7 +323,7 @@ def seat_with_mixing(papers, rooms):
     # a second one joins in the even columns only if otherwise the leftovers
     # would not fit in the free rooms
     for index in range(room_index, len(rooms)):
-        leftovers = [leftover for leftover in leftovers if leftover[1]]
+        leftovers = still_unseated(leftovers)
         if not leftovers:
             break
         leftovers.sort(key=lambda leftover: (-len(leftover[1]), leftover[0]))
@@ -327,18 +335,26 @@ def seat_with_mixing(papers, rooms):
         plans.append(seat_room(room, groups))
 
     unseated = {}
+    for paper_id, students in still_unseated(leftovers):
+        unseated[paper_id] = students
+    return plans, unseated
+
+
+def still_unseated(leftovers):
+    """The (paper_id, students) leftovers that still have students."""
+    left = []
     for paper_id, students in leftovers:
         if students:
-            unseated[paper_id] = students
-    return plans, unseated
+            left.append((paper_id, students))
+    return left
 
 
 def pick_partner(leftovers, room):
     """The biggest leftover that fits completely in the room's even columns;
     if none fits, the biggest. leftovers is sorted biggest first."""
-    for leftover in leftovers:
-        if len(leftover[1]) <= room.partner_seats():
-            return leftover
+    for paper_id, students in leftovers:
+        if len(students) <= room.partner_seats():
+            return paper_id, students
     return leftovers[0]
 
 
@@ -421,7 +437,8 @@ def best_join(plans, leftovers, room_of, position, refused):
         size[paper_id] = len(students_of(plan, paper_id))
     order = sorted(leftovers, key=lambda paper_id: (-size[paper_id], paper_id))
 
-    best = None
+    best_rank = None
+    best_choice = None
     for index, first_id in enumerate(order):
         for second_id in order[index + 1:]:
             if (first_id, second_id) in refused:
@@ -439,11 +456,10 @@ def best_join(plans, leftovers, room_of, position, refused):
                 empty = (room.alone_seats() + room.partner_seats()
                          - size[first_id] - size[second_id])
                 rank = (empty, position[shared.room_id], first_id, second_id)
-                if best is None or rank < best[0]:
-                    best = (rank, first_id, second_id, shared)
-    if best is None:
-        return None
-    return best[1], best[2], best[3]
+                if best_rank is None or rank < best_rank:
+                    best_rank = rank
+                    best_choice = (first_id, second_id, shared)
+    return best_choice
 
 
 def has_room_after(plans, paper_id, its_leftover, shared, position):
@@ -457,20 +473,27 @@ def has_room_after(plans, paper_id, its_leftover, shared, position):
     return False
 
 
+def two_paper_rooms(seating):
+    """How many rooms of the whole seating hold two papers."""
+    count = 0
+    for plans in seating.values():
+        for plan in plans:
+            if len(plan.papers) == 2:
+                count += 1
+    return count
+
+
 def basis_line(seating):
     """One line saying on what basis the seating was made."""
-    plans = []
-    for room_plans in seating.values():
-        plans += room_plans
-    two = 0
-    for plan in plans:
-        if len(plan.papers) == 2:
-            two += 1
+    rooms = 0
+    for plans in seating.values():
+        rooms += len(plans)
+    two = two_paper_rooms(seating)
     line = ("Seating basis: one paper per room, with the mix of room sizes "
             "that needs the fewest rooms; ")
     if two == 0:
-        return line + f"all {len(plans)} rooms hold one paper."
-    one = len(plans) - two
+        return line + f"all {rooms} rooms hold one paper."
+    one = rooms - two
     one_text = "1 room holds" if one == 1 else f"{one} rooms hold"
     two_text = "1 holds" if two == 1 else f"{two} hold"
     return line + (f"{one_text} one paper and {two_text} two (two papers' "

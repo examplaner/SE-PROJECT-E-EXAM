@@ -52,7 +52,7 @@ Duties: 14. Each regular teacher has 1 to 2; PhD scholars have 0. Teachers with 
 Wrote output/2026-11-19_02-43-53
 ```
 
-Then check the plan, naming the folder from the last line:
+Then check the plan, naming the folder from the last line (on Windows it prints with `\`; both work):
 
 ```
 python check.py data/tiny output/2026-11-19_02-43-53

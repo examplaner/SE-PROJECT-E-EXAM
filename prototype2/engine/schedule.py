@@ -133,7 +133,11 @@ def check_before_scheduling(exam):
             papers_of.setdefault(student, []).append(paper.paper_id)
     days = exam.days
     most = most_papers_in_window(days, exam.gap)
-    too_many = sorted(student for student, paper_ids in papers_of.items() if len(paper_ids) > most)
+    too_many = []
+    for student, paper_ids in papers_of.items():
+        if len(paper_ids) > most:
+            too_many.append(student)
+    too_many.sort()
     if too_many:
         first = too_many[0]
         names = ", ".join(sorted(papers_of[first]))
@@ -207,10 +211,13 @@ class Timetable:
         return self.checked[key]
 
     def problem(self, slot, extra):
-        return self.check(slot, extra)[0]
+        problem, _ = self.check(slot, extra)
+        return problem
 
     def rooms_added(self, slot, paper):
-        return self.check(slot, [paper])[1] - self.check(slot, [])[1]
+        _, rooms_with_paper = self.check(slot, [paper])
+        _, rooms_now = self.check(slot, [])
+        return rooms_with_paper - rooms_now
 
     def is_waiting(self, slot):
         """A session waiting for another paper: a teacher of its papers has
@@ -286,7 +293,10 @@ def choose_slot(way, paper, free_days, timetable):
                     return slot
         return None
 
-    slots = [(day, session) for day in free_days for session in sessions]
+    slots = []
+    for day in free_days:
+        for session in sessions:
+            slots.append((day, session))
     fitting = [slot for slot in slots if timetable.problem(slot, [paper]) is None]
     if fitting:
         return min(fitting, key=lambda slot: slot_rank(way, slot, paper, timetable))

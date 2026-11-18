@@ -76,12 +76,13 @@ def best_combination(group_sizes, sizes, available):
 
     Groups are added one at a time. For each count of rooms used of each size,
     only the best way found to reach it is kept, so the search stays small."""
-    # rooms used of each size -> (rooms, empty seats, options chosen so far)
-    best_for = {tuple([0] * len(sizes)): (0, 0, [])}
+    # rooms used of each size -> (score, options chosen so far), where score
+    # is (rooms, empty seats) and the lower score is the better
+    best_for = {tuple([0] * len(sizes)): ((0, 0), [])}
     for students in group_sizes:
         options = room_options(students, sizes, available)
         next_best = {}
-        for used, (rooms, empty, chosen) in best_for.items():
+        for used, ((rooms, empty), chosen) in best_for.items():
             for option in options:
                 now_used = []
                 for already, more in zip(used, option):
@@ -98,12 +99,18 @@ def best_combination(group_sizes, sizes, available):
                 for count, size in zip(option, sizes):
                     seats += count * size
                 score = (rooms + sum(option), empty + seats - students)
-                kept = next_best.get(now_used)
-                if kept is None or score < kept[:2]:
-                    next_best[now_used] = (score[0], score[1], chosen + [option])
+                # on a tie the way found first stays
+                if now_used not in next_best or score < next_best[now_used][0]:
+                    next_best[now_used] = (score, chosen + [option])
         if not next_best or len(next_best) > MAX_STATES:
             return None
         best_for = next_best
 
-    rooms, empty, chosen = min(best_for.values(), key=lambda value: value[:2])
-    return chosen
+    # the lowest score; on a tie the first one found
+    best_score = None
+    best_chosen = None
+    for score, chosen in best_for.values():
+        if best_score is None or score < best_score:
+            best_score = score
+            best_chosen = chosen
+    return best_chosen
