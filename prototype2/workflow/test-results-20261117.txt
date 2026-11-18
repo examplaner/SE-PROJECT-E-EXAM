@@ -1,0 +1,21 @@
+test_extend_range_keeps_overrides_and_applies_existing_weekdays (test_workflow.CalendarTests.test_extend_range_keeps_overrides_and_applies_existing_weekdays) ... ok
+test_file_weekdays_and_holiday_are_preselected (test_workflow.CalendarTests.test_file_weekdays_and_holiday_are_preselected) ... ok
+test_invalid_range_and_outside_click (test_workflow.CalendarTests.test_invalid_range_and_outside_click) ... ok
+test_leap_year_and_single_day_range (test_workflow.CalendarTests.test_leap_year_and_single_day_range) ... ok
+test_shrinking_then_extending_range_preserves_prior_choices (test_workflow.CalendarTests.test_shrinking_then_extending_range_preserves_prior_choices) ... ok
+test_weekend_can_be_allowed_for_this_run_only (test_workflow.CalendarTests.test_weekend_can_be_allowed_for_this_run_only) ... ok
+test_calendar_back_preserves_inputs_and_calendar (test_workflow.FlowTests.test_calendar_back_preserves_inputs_and_calendar) ... ok
+test_gap_failure_returns_to_calendar_then_retry_uses_extended_range (test_workflow.FlowTests.test_gap_failure_returns_to_calendar_then_retry_uses_extended_range) ... ok
+test_no_seating_preserves_timetable_and_returns_to_selection (test_workflow.FlowTests.test_no_seating_preserves_timetable_and_returns_to_selection) ... ok
+test_no_timetable_goes_back_without_losing_inputs (test_workflow.FlowTests.test_no_timetable_goes_back_without_losing_inputs) ... ok
+test_other_failure_allows_input_recovery (test_workflow.FlowTests.test_other_failure_allows_input_recovery) ... ok
+test_all_original_inputs_remain_unchanged (test_workflow.GenerationTests.test_all_original_inputs_remain_unchanged) ... ok
+test_failure_is_existing_engine_message_and_only_why_is_written (test_workflow.GenerationTests.test_failure_is_existing_engine_message_and_only_why_is_written) ... ok
+test_full_main_seating_passes_independent_checker (test_workflow.GenerationTests.test_full_main_seating_passes_independent_checker) ... ok
+test_main_timetable_is_written_without_seating_files (test_workflow.GenerationTests.test_main_timetable_is_written_without_seating_files) ... ok
+test_missing_course_file_is_reported_without_creating_output (test_workflow.GenerationTests.test_missing_course_file_is_reported_without_creating_output) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 5.862s
+
+OK
