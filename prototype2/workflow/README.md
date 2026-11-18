@@ -10,11 +10,28 @@ This is a new entry point. All previous files remain unchanged. The `engine/`
 folder contains an unchanged copy of prototype1's planning and checking source
 and terms guide; no input datasets are copied or generated.
 
-Run from any PowerShell location using the existing Anaconda installation
-(it already has PyYAML and Tkinter):
+On Windows, open an interactive PowerShell terminal in the repository folder.
+Use Python 3.10 or newer with Tkinter and venv. Git for Windows supplies Bash
+for the demo tests. The setup command downloads the Python dependencies into
+the workflow's local virtual environment.
 
 ```powershell
-& "$env:USERPROFILE\anaconda3\python.exe" -B "C:\Users\rs224\Downloads\SE-EXAM-clean\prototype2\workflow\run.py"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\prototype2\workflow\setup.ps1 -Verify -Launch
+```
+
+`-Verify` runs the engine tests, workflow tests, and all ten Bash demo cases.
+`-Launch` starts the interactive workflow after setup. To launch again without
+running setup, use:
+
+```powershell
+& .\prototype2\workflow\.venv\Scripts\python.exe -B .\prototype2\workflow\run.py
+```
+
+To present one case at a time, open Git Bash in the repository folder:
+
+```bash
+export PYTHON="$PWD/prototype2/workflow/.venv/Scripts/python.exe"
+bash prototype2/workflow/tests/demo/04-gap-window.sh
 ```
 
 Up/Down and Enter navigate terminal choices. Delete clears an input choice,
