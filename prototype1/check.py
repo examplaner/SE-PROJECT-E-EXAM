@@ -226,10 +226,11 @@ def read_input_table(path, columns):
 def read_input_yaml(path):
     if not path.is_file():
         raise CannotCheck(f"{path} is missing.")
+    # ValueError: PyYAML reads 2026-11-40 as a date and then fails on it
     try:
         with open(path, encoding="utf-8-sig") as file:
             content = yaml.safe_load(file)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError) as error:
         raise CannotCheck(f"{path} can't be read ({error}).")
     if content is None:
         return {}

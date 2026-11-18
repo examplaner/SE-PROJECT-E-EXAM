@@ -110,9 +110,10 @@ def check_yaml_file(path, problems):
     if not path.is_file():
         problems.append(Problem(path.name, None, "file is present", "file is missing"))
         return
+    # ValueError: PyYAML reads 2026-11-40 as a date and then fails on it
     try:
         content = loader.read_yaml(path)
-    except (UnicodeDecodeError, yaml.YAMLError) as error:
+    except (UnicodeDecodeError, yaml.YAMLError, ValueError) as error:
         problems.append(Problem(path.name, None, "file is valid YAML",
                                 f"cannot be read as YAML ({error})"))
         return
