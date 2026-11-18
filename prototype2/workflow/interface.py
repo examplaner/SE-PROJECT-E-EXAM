@@ -4,11 +4,13 @@ from dataclasses import replace
 from pathlib import Path
 import shutil
 import sys
+import textwrap
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "keyboard_cli"))
 import menu as keyboard
 from input_selection import INPUTS as OLD_INPUTS, choose_path, path_problem
 from calendars import choose_dates
+import planner
 
 INPUTS = tuple(replace(item, label="Who teaches what") if item.key == "teaching" else item
                for item in OLD_INPUTS)
@@ -28,6 +30,44 @@ def draw(title, entries, current, detail=""):
     lines.extend(line[:width] + "\x1b[K" for line in str(detail).splitlines()[:4])
     sys.stdout.write("\x1b[H" + "\n".join(lines) + "\x1b[J")
     sys.stdout.flush()
+
+
+def validation_status(selected):
+    if not selected:
+        return "Choose an input to validate it."
+    if len(selected) == len(INPUTS):
+        return "Stages 1 and 2 passed for all inputs. Continue to exam dates."
+    lines = ["Stage 1 passed. Stage 2 passed for the checks available so far."]
+    if "registrations" in selected and "courses" not in selected:
+        lines.append("Course-code check pending until Courses is selected.")
+    if "registrations" in selected and "students" not in selected:
+        lines.append("Student-ID check pending until Student lists folder is selected.")
+    lines.append("Remaining cross-file checks run as you select their inputs.")
+    return "\n".join(lines)
+
+
+def show_validation_error(error):
+    columns, rows = shutil.get_terminal_size((100, 30))
+    width = max(1, columns - 1)
+    page_size = max(1, rows - 3)
+    lines = []
+    for line in str(error).splitlines():
+        lines.extend(textwrap.wrap(line, width) or [""])
+    start = 0
+    while True:
+        page = lines[start:start + page_size]
+        footer = "Enter or Esc: return to inputs"
+        if len(lines) > page_size:
+            footer = "Up/Down: page | " + footer
+        sys.stdout.write("\x1b[H\x1b[2J" + "\n".join(page + ["", footer[:width]]))
+        sys.stdout.flush()
+        action = keyboard.read_key()
+        if action in ("enter", "back"):
+            return
+        if action == "down" and start + page_size < len(lines):
+            start += page_size
+        elif action == "up":
+            start = max(0, start - page_size)
 
 
 class TerminalUI:
@@ -77,7 +117,8 @@ class TerminalUI:
                     elif action == "delete" and current < len(INPUTS):
                         item = INPUTS[current]
                         selected.pop(item.key, None)
-                        message = f"{item.label} cleared. No file was deleted."
+                        planner.validate_selection(selected)
+                        message = validation_status(selected)
                     elif action == "back":
                         message = "All choices kept. Select Exit if you want to leave."
                     elif action == "enter":
@@ -91,6 +132,7 @@ class TerminalUI:
                                     current, message = index, problem
                                     break
                             else:
+                                planner.validate_selection(selected)
                                 return True
                             continue
                         item = INPUTS[current]
@@ -101,11 +143,18 @@ class TerminalUI:
                         path = Path(path).resolve()
                         problem = path_problem(item, path)
                         if problem:
-                            message = problem
-                            continue
+                            raise planner.InputProblem(f"Stage 1 - file selection\n{problem}")
+                        # A bad replacement must not displace the previous file.
+                        planner.validate_selection({item.key: path})
                         selected[item.key] = path
-                        message = f"Selected {item.label.lower()}."
+                        # Keep both files on a conflict so either side can be corrected.
+                        if len(selected) > 1:
+                            planner.validate_selection(selected)
+                        message = validation_status(selected)
                         current = keyboard.next_missing(selected, current)
+                except planner.InputProblem as error:
+                    show_validation_error(error)
+                    message = "Review the reported input. Select a file again after correcting it."
                 except KeyboardInterrupt:
                     message = "All choices kept. Select Exit to leave."
                 except (OSError, RuntimeError, ValueError) as error:

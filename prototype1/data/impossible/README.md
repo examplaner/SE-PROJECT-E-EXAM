@@ -1,5 +1,13 @@
 # Impossible datasets (step 7)
 
+## Live input validation in `examplan`
+
+1. Under **Student course registrations**, choose [registrations_unknown_course.csv](registrations_unknown_course.csv). Its header is valid. If Courses is still empty, the course-code check is pending.
+2. Under **Courses**, choose [window_too_short/courses.csv](window_too_short/courses.csv). Stage 2 reports one problem on row 50. Student `BT2CSE0001` is registered for `CSE9999`, which is absent from the course list.
+3. Replace the registrations selection with [window_too_short/registrations.csv](window_too_short/registrations.csv). The error clears.
+
+## Planning failures
+
 Each folder is a copy of `data/tiny` with one thing broken on purpose, so that no plan is possible. Run one from `prototype1/`:
 
 ```

@@ -47,10 +47,12 @@ def run_workflow(ui, backend=planner):
             except backend.NoPlan as error:
                 try:
                     why = backend.save_failure(error)
-                    location = f"Failure explanation: {why}"
+                    location = f"why.txt path: {why}"
                 except OSError as saving_error:
                     location = f"Could not save why.txt: {saving_error}"
-                ui.message(f"{error}\n{location}\nTerms: {backend.TERMS}\nYour selections are kept.")
+                ui.message(f"Why no plan was possible\n{error}\n\n{location}\n"
+                           "basis.txt is created when a plan is saved.\n"
+                           f"Terms: {backend.TERMS}\nYour selections are kept.")
                 if backend.recovery_for(error) == "dates":
                     stage = "range"
                 else:
@@ -76,15 +78,16 @@ def run_workflow(ui, backend=planner):
                 stage = "range"
                 continue
             ui.report(f"Timetable saved and checked: {plan.folder / 'timetable' / 'schedule.csv'}\n"
+                      f"basis.txt path: {plan.folder / 'timetable' / 'basis.txt'}\n"
                       f"Terms: {plan.folder / 'timetable' / 'terms.md'}")
             stage = "seating"
         elif stage == "seating":
-            if ui.choose("Generate seating plan?", ["Yes", "No - back to inputs"],
+            if ui.choose("Generate seating plan and teacher duties?", ["Yes", "No - back to inputs"],
                          f"Timetable: {plan.folder / 'timetable' / 'schedule.csv'}\n"
                          "The saved timetable remains available if you go back.") != 0:
                 stage = "inputs"
                 continue
-            ui.report("Writing and independently checking the seating plan...")
+            ui.report("Writing and checking the seating plan and teacher duties...")
             try:
                 folder, counts = backend.generate_seating(plan)
             except (OSError, RuntimeError) as error:
@@ -93,7 +96,8 @@ def run_workflow(ui, backend=planner):
                            f"Terms: {backend.TERMS}")
                 continue
             ui.report(f"Seating plan: {folder / 'daywise_seating_plans'}\n"
-                      f"Teacher duties: {folder / 'duties.csv'}\nTerms: {folder / 'terms.md'}\n"
+                      f"Teacher duties: {folder / 'duties.csv'}\n"
+                      f"basis.txt path: {folder / 'basis.txt'}\nTerms: {folder / 'terms.md'}\n"
                       f"Plan check passed: {counts['papers']} papers, {counts['room files']} room files, "
                       f"{counts['seats']} seats, {counts['duties']} duties.")
             if ui.choose("Plan saved", ["Back to input selection", "Exit"], str(folder)) == 1:

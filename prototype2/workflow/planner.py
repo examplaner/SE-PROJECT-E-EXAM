@@ -20,7 +20,7 @@ import loader
 import main as writer
 import schedule
 import seat
-import validate
+from engine import validate
 from errors import NoPlan
 
 TERMS = ENGINE / "docs" / "terms.md"
@@ -34,7 +34,7 @@ class InputProblem(Exception):
 def read_mapping(path):
     try:
         value = loader.read_yaml(path)
-    except (OSError, UnicodeError, yaml.YAMLError) as error:
+    except (OSError, ValueError, yaml.YAMLError) as error:
         raise InputProblem(f"{path}: {error}") from error
     if not isinstance(value, dict):
         raise InputProblem(f"{path}: expected YAML key/value settings.")
@@ -61,53 +61,76 @@ def fingerprints(selected):
             for path in source_files(selected)}
 
 
-def load_selected(selected, settings):
-    """Use the existing CSV checks and data rules, with selected paths as inputs."""
-    problems = []
+def selected_table(path, columns, problems):
+    before = len(problems)
+    result = validate.check_csv_file(path, path.name, columns, problems)
+    if len(problems) != before:
+        return []
+    header, rows = result
+    return [dict(zip(header, values), _row=number) for number, values in rows]
+
+
+def validate_selection(selected, settings=None):
+    """Read the chosen files. Run rules as soon as their inputs are present."""
     data = {}
-    for filename, columns in loader.CSV_COLUMNS.items():
-        key = Path(filename).stem
-        path = Path(selected[key])
-        before = len(problems)
+    problems = []
+    for key, value in selected.items():
+        path = Path(value)
         try:
-            validate.check_csv_file(path, str(path), columns, problems)
-            if len(problems) == before:
-                data[key] = loader.read_table(path)
-        except (OSError, UnicodeError, csv.Error) as error:
-            raise InputProblem(f"{path}: {error}") from error
-    data.update(students=[], roster_files=[])
-    folder = Path(selected["students"])
-    if not folder.is_dir():
-        raise InputProblem(f"{folder}: student lists folder is missing.")
-    for path in sorted(folder.glob("*.csv")):
-        before = len(problems)
-        try:
-            validate.check_csv_file(path, str(path), loader.ROSTER_COLUMNS, problems)
-            if len(problems) != before:
-                continue
-            data["roster_files"].append(path.stem)
-            for row in loader.read_table(path):
-                row.update(section_id=path.stem, _file=str(path))
-                data["students"].append(row)
-        except (OSError, UnicodeError, csv.Error) as error:
-            raise InputProblem(f"{path}: {error}") from error
-    data["constraints"] = read_mapping(selected["constraints"])
-    data["settings"] = copy.deepcopy(settings)
+            if key in ("settings", "constraints"):
+                data[key] = read_mapping(path)
+            elif key == "students":
+                if not path.is_dir():
+                    raise InputProblem(f"{path}: student lists folder is missing.")
+                rosters = sorted(path.glob("*.csv"))
+                if not rosters:
+                    raise InputProblem(f"{path}: student lists folder contains no CSV files.")
+                data["roster_files"] = [roster.stem for roster in rosters]
+                data["students"] = []
+                for roster in rosters:
+                    for row in selected_table(roster, loader.ROSTER_COLUMNS, problems):
+                        row.update(section_id=roster.stem, _file=str(roster))
+                        data["students"].append(row)
+            else:
+                data[key] = selected_table(path, loader.CSV_COLUMNS[f"{key}.csv"], problems)
+        except (InputProblem, OSError, UnicodeError, csv.Error) as error:
+            raise InputProblem(f"Stage 1 - file structure\n{error}") from error
     if problems:
-        raise InputProblem(validate.format_report(problems))
+        raise InputProblem("Stage 1 - file structure\n" + validate.format_report(problems))
+
     problems = validate.check_data(data)
+    for problem in problems:
+        key = Path(problem.file).stem
+        if problem.file in loader.CSV_COLUMNS or problem.file in loader.YAML_FILES:
+            problem.file = Path(selected[key]).name
     if problems:
-        raise InputProblem(validate.format_report(problems))
+        raise InputProblem("Stage 2 - data rules\n" + validate.format_report(problems))
+    if settings is not None:
+        validate.check_settings(settings, problems)
+        if problems:
+            raise InputProblem("Stage 2 - calendar settings\n" + validate.format_report(problems))
+        data["settings"] = copy.deepcopy(settings)
     # These values become directory/file names when exporting the plan.
-    for name in [str(value) for value in settings["sessions"]] + [r["room_id"] for r in data["rooms"]]:
+    names = [str(value) for value in data.get("settings", {}).get("sessions", [])]
+    names.extend(row["room_id"] for row in data.get("rooms", []))
+    for name in names:
         if (not name or name in (".", "..") or name[-1:] in (".", " ")
                 or any(char in name for char in '<>:"/\\|?*')
                 or any(ord(char) < 32 for char in name)
                 or name.split(".")[0].upper() in
                 {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)],
                  *[f"LPT{i}" for i in range(1, 10)]}):
-            raise InputProblem(f"Room IDs and session names must be safe file names: {name!r}.")
+            raise InputProblem(f"Stage 2 - data rules\nRoom IDs and session names must be safe file names: {name!r}.")
     return data
+
+
+def load_selected(selected, settings):
+    """Generation requires every input, including the effective calendar settings."""
+    required = [Path(name).stem for name in loader.CSV_COLUMNS] + ["students", "settings", "constraints"]
+    for key in required:
+        if key not in selected:
+            raise InputProblem(f"Select the {key} input first.")
+    return validate_selection(selected, settings)
 
 
 def checker_input(selected, settings):

@@ -2,6 +2,17 @@
 
 Steps are from `docs/prototype1_model_spec.md` §14.
 
+## CLI planning review (2026-11-17)
+
+- Krish requested a deep review and a terminal flow for supplying exam data files, entering dates, and selecting holidays/skipped dates.
+- Created and switched to `krish/cli` from the checked-out `krish/fixes2`, as explicitly requested. Existing untracked `data/demo/` was left untouched. No commit or push.
+- Reviewed prototype instructions/specifications, progress/handoff, planner entry point, loader/validation, scheduling, seating, duties, checker entry points and existing tests. The recorded build steps run through step 9, followed by fixes 1–3 and the terms page.
+- Dates, allowed weekdays and specific holidays already work through `settings.yaml` and `schedule.exam_days()`. The proposed feature is a guided terminal interface around this engine, with no scheduling-rule changes.
+- Proposal awaiting approval: a new `prototype2/` for the CLI, using a copy of the current engine per repository isolation rules. Collect inputs/settings, preview eligible dates, validate, generate, then independently check. Preserve the exact effective input/settings for checking each run. File selection mode, CSV versus Excel support, and whether settings affect a copy or the source still need Krish's answers.
+- Baseline test attempt: default `python` resolves to an inaccessible WindowsApps launcher. Located existing Python at `C:/Users/rs224/AppData/Roaming/uv/python/cpython-3.14-windows-x86_64-none/python.exe`; `-m pytest tests -q` stops with `No module named pytest`. No packages installed. The previous 145-pass result is historical, not reverified this session.
+- Review limitations relevant to the CLI: the scheduler tries three greedy strategies, not all possible schedules; a final duty assignment failure does not trigger timetable retries. File permission/write errors and terminal cancellation need deliberate handling in the new interface. `README.md` still says 124 tests while the latest notes say 145.
+- Exact next step: obtain the input workflow decisions and approval for the first small CLI step under `repo_instructions.md` §3. No CLI code has been written.
+
 ## Done
 
 - **Step 0, understand:** done.

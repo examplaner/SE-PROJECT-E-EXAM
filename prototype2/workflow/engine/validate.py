@@ -70,7 +70,7 @@ def format_report(problems):
 # ---------------------------------------------------------------- stage 1
 
 def check_csv_file(path, file_label, expected_columns, problems):
-    """Stage 1 checks for one CSV file."""
+    """Check the CSV structure and return the header and rows read from disk."""
     if not path.is_file():
         problems.append(Problem(file_label, None, "file is present",
                                 "file is missing"))
@@ -92,6 +92,7 @@ def check_csv_file(path, file_label, expected_columns, problems):
             problems.append(Problem(
                 file_label, row_number, "row has one value per column",
                 f"has {len(values)} value(s), expected {len(expected_columns)}"))
+    return header, rows
 
 
 def check_files(input_dir):
@@ -152,27 +153,30 @@ def check_ids(rows, file_name, id_column, problems):
 
 
 def is_positive_whole_number(text):
-    return text.isdigit() and int(text) >= 1
+    try:
+        return text.isdecimal() and int(text) >= 1
+    except ValueError:
+        return False
 
 
 def check_sections(data, problems):
     """sections.csv and the roster files in sections/.
     Returns (sections, section_of, first_seen): section_of maps
     student -> section, first_seen maps student -> (file, row)."""
-    sections = check_ids(data["sections"], "sections.csv", "section_id", problems)
+    sections = check_ids(data.get("sections", []), "sections.csv", "section_id", problems)
     for row in sections.values():
         if row["cohort_id"] == "":
             problems.append(Problem("sections.csv", row["_row"],
                                     "ID is not blank", "cohort_id is blank"))
 
     for section_id, row in sections.items():
-        if section_id not in data["roster_files"]:
+        if "roster_files" in data and section_id not in data["roster_files"]:
             problems.append(Problem(
                 "sections.csv", row["_row"], "section has a roster file",
                 f"section {section_id} has no file "
                 f"{loader.ROSTER_FOLDER}/{section_id}.csv"))
-    for section_id in data["roster_files"]:
-        if section_id not in sections:
+    for section_id in data.get("roster_files", []):
+        if "sections" in data and section_id not in sections:
             problems.append(Problem(
                 f"{loader.ROSTER_FOLDER}/{section_id}.csv", None,
                 "roster file is listed in sections.csv",
@@ -181,7 +185,7 @@ def check_sections(data, problems):
     # Every student appears in exactly one section file (first one wins).
     section_of = {}
     first_seen = {}
-    for student in data["students"]:
+    for student in data.get("students", []):
         student_id = student["student_id"]
         if student_id == "":
             problems.append(Problem(student["_file"], student["_row"],
@@ -200,9 +204,9 @@ def check_sections(data, problems):
 
 def check_courses(data, sections, problems):
     courses = check_ids(data["courses"], "courses.csv", "course_code", problems)
-    cohorts = {row["cohort_id"] for row in sections.values()}
+    cohorts = {row["cohort_id"] for row in (sections or {}).values()}
     for code, row in courses.items():
-        if row["cohort_id"] not in cohorts:
+        if not row["cohort_id"] or (sections is not None and row["cohort_id"] not in cohorts):
             problems.append(Problem(
                 "courses.csv", row["_row"], "cohort exists",
                 f"cohort {row['cohort_id'] or '(blank)'} of {code} "
@@ -251,17 +255,17 @@ def check_registrations(data, sections, section_of, first_seen, courses,
 
     for row in data["registrations"]:
         student_id, code = row["student_id"], row["course_code"]
-        known_student = student_id in section_of
-        known_code = code in courses
-        if not known_student:
+        unknown_student = not student_id or (section_of is not None and student_id not in section_of)
+        unknown_code = not code or (courses is not None and code not in courses)
+        if unknown_student:
             problems.append(Problem(
                 "registrations.csv", row["_row"], "student exists",
                 f"student {student_id or '(blank)'} is not in any section file"))
-        if not known_code:
+        if unknown_code:
             problems.append(Problem(
                 "registrations.csv", row["_row"], "course code exists",
                 f"course code {code or '(blank)'} is not in courses.csv"))
-        if not (known_student and known_code):
+        if unknown_student or unknown_code:
             continue
 
         if (student_id, code) in seen_pairs:
@@ -272,8 +276,8 @@ def check_registrations(data, sections, section_of, first_seen, courses,
             continue
         seen_pairs[(student_id, code)] = row["_row"]
 
-        section_id = section_of[student_id]
-        if section_id in sections:  # unlisted roster files are reported above
+        section_id = section_of[student_id] if section_of is not None else None
+        if sections is not None and section_id in sections and courses is not None:
             student_cohort = sections[section_id]["cohort_id"]
             course_cohort = courses[code]["cohort_id"]
             if student_cohort != course_cohort:
@@ -287,13 +291,13 @@ def check_registrations(data, sections, section_of, first_seen, courses,
         codes_with_registration.add(code)
         section_codes.add((section_id, code))
 
-    for student_id in section_of:
+    for student_id in first_seen:
         if student_id not in students_with_registration:
             file_name, row_number = first_seen[student_id]
             problems.append(Problem(
                 file_name, row_number, "student has a registration",
                 f"student {student_id} has no registrations"))
-    for code, row in courses.items():
+    for code, row in (courses or {}).items():
         if code not in codes_with_registration:
             problems.append(Problem(
                 "courses.csv", row["_row"], "course code has a registration",
@@ -306,30 +310,33 @@ def check_teaching(data, teachers, courses, sections, section_codes, problems):
         teacher_id = row["teacher_id"]
         code = row["course_code"]
         section_id = row["section_id"]
-        if teacher_id not in teachers:
+        if not teacher_id or (teachers is not None and teacher_id not in teachers):
             problems.append(Problem(
                 "teaching.csv", row["_row"], "teacher exists",
                 f"teacher {teacher_id or '(blank)'} is not in teachers.csv"))
-        if code not in courses:
+        unknown_code = not code or (courses is not None and code not in courses)
+        unknown_section = not section_id or (sections is not None and section_id not in sections)
+        if unknown_code:
             problems.append(Problem(
                 "teaching.csv", row["_row"], "course code exists",
                 f"course code {code or '(blank)'} is not in courses.csv"))
-        if section_id not in sections:
+        if unknown_section:
             problems.append(Problem(
                 "teaching.csv", row["_row"], "section exists",
                 f"section {section_id or '(blank)'} is not in sections.csv"))
-        if code not in courses or section_id not in sections:
+        if unknown_code or unknown_section:
             continue
-
-        course_cohort = courses[code]["cohort_id"]
-        section_cohort = sections[section_id]["cohort_id"]
-        if course_cohort != section_cohort:
-            problems.append(Problem(
-                "teaching.csv", row["_row"],
-                "course is offered to the section's cohort",
-                f"{code} is offered to {course_cohort}, but {section_id} "
-                f"is in {section_cohort}"))
-        elif (section_id, code) not in section_codes:
+        if courses is not None and sections is not None:
+            course_cohort = courses[code]["cohort_id"]
+            section_cohort = sections[section_id]["cohort_id"]
+            if course_cohort != section_cohort:
+                problems.append(Problem(
+                    "teaching.csv", row["_row"],
+                    "course is offered to the section's cohort",
+                    f"{code} is offered to {course_cohort}, but {section_id} "
+                    f"is in {section_cohort}"))
+                continue
+        if section_codes is not None and (section_id, code) not in section_codes:
             problems.append(Problem(
                 "teaching.csv", row["_row"],
                 "section has students writing the course",
@@ -440,7 +447,7 @@ def check_constraints(constraints, courses, problems):
                    f"{label} {group} has {len(group)} code(s)")
         for code in group:
             code = str(code)
-            if code not in courses:
+            if courses is not None and code not in courses:
                 report("course code exists",
                        f"{label}: course code {code} is not in courses.csv")
             if code in group_of:
@@ -453,15 +460,30 @@ def check_constraints(constraints, courses, problems):
 
 
 def check_data(data):
-    """Stage 2. Returns a list of Problems; empty means the input is valid."""
+    """Stage 2 for the supplied tables. Missing inputs defer dependent rules.
+
+    None means the picker has not supplied a table. An empty table is a
+    real input and must still participate in the relationship checks.
+    """
     problems = []
     sections, section_of, first_seen = check_sections(data, problems)
-    courses = check_courses(data, sections, problems)
-    check_rooms(data, problems)
-    teachers = check_teachers(data, problems)
-    section_codes = check_registrations(data, sections, section_of,
-                                        first_seen, courses, problems)
-    check_teaching(data, teachers, courses, sections, section_codes, problems)
-    check_settings(data["settings"], problems)
-    check_constraints(data["constraints"], courses, problems)
+    if "sections" not in data:
+        sections = None
+    if "students" not in data:
+        section_of = None
+    courses = check_courses(data, sections, problems) if "courses" in data else None
+    teachers = check_teachers(data, problems) if "teachers" in data else None
+    if "rooms" in data:
+        check_rooms(data, problems)
+    section_codes = None
+    if "registrations" in data:
+        pairs = check_registrations(data, sections, section_of, first_seen, courses, problems)
+        if section_of is not None:
+            section_codes = pairs
+    if "teaching" in data:
+        check_teaching(data, teachers, courses, sections, section_codes, problems)
+    if "settings" in data:
+        check_settings(data["settings"], problems)
+    if "constraints" in data:
+        check_constraints(data["constraints"], courses, problems)
     return problems

@@ -1,5 +1,49 @@
 # Interactive workflow progress
 
+## 2026-11-19
+
+Made CLI planning failures easier to spot with a heading, the full engine
+reason, a labeled `why.txt` path, and a note explaining when `basis.txt` is
+created. Successful timetable and seating saves now print their `basis.txt`
+paths. The terminal display is ready for Krish's review.
+
+Added the grouped Git Bash runner. Verified the three validation examples,
+seven impossible datasets, each named test group, and all 191 automated cases
+with both full-suite command forms. A temporary corrected fixture in place
+of the deliberately bad input produced the expected demo failure.
+
+Added a dedicated `no-plan` runner group for Step 7 automated tests and
+mapped test commands to the recorded prototype steps in `BASH_COMMANDS.md`.
+
+Added a reusable Stage 2 registration example in `prototype1/data/impossible`.
+Verified the single row 50 error and its correction with the live validator.
+All 20 tests in the no-plan and live-validation suites passed.
+
+## 2026-11-18
+
+Added live two-stage validation to the workflow input menu. A bad header or
+single-file data error preserves an earlier choice. Cross-file errors appear
+when their inputs are available and either file can be replaced. Continue
+rereads the selection before opening calendars. Generation checks the selected
+source settings and effective calendar settings. Eight new tests cover picker
+order, rejection, correction, pending relationships and revalidation.
+The class walkthrough is in `TEST_CASES.md`. The stage 1 header report,
+line wrapping, dismissal and return to the menu were exercised in a Windows
+terminal with a controlled picker response.
+
+Documented all 183 active test cases in `TEST_CASES.md`. The 145 engine tests
+and the 10 picker, 12 keyboard and 16 workflow tests passed. Reproduced the
+two input-validation failures, the short-window failure, a clean tiny plan
+and a damaged seating plan in a temporary directory.
+
+Added `bin/examplan.cmd` and registered its folder on this Windows account's
+user PATH. Verified PowerShell and Command Prompt find `examplan` from the
+user's home folder. The input menu opened and Exit returned success.
+
+The second confirmation and progress message now name both the seating plan
+and teacher duties. One Yes saves both. All 16 workflow tests passed, including
+the export check for 454 room files and 908 duty assignments on the main dataset.
+
 ## Completed 2026-11-17
 
 Krish requested continuing from file selection into separate date-range and
