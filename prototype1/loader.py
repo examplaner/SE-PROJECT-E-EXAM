@@ -1,53 +1,59 @@
-"""Read an input folder into plain Python data.
+"""Read an input folder into plain Python data. Checking it is validate.py's job.
 
-This module only READS. It does not decide whether the data is right;
-that is validate.py's job. Run validate.check_files() first: load() assumes
-every file exists and every header is right.
+load() gives back one dict:
 
-What load() gives back is one dict:
+    data["sections"], data["courses"], data["registrations"],
+    data["rooms"], data["teachers"], data["teaching"]
+                          the rows of each CSV file
+    data["students"]      one row per line of every roster file in sections/,
+                          with "section_id" and "_file" added
+    data["roster_files"]  section IDs that have a roster file
+    data["settings"]      settings.yaml as a dict
+    data["constraints"]   constraints.yaml as a dict
 
-    data["sections"]       rows of sections.csv
-    data["courses"]        rows of courses.csv
-    data["registrations"]  rows of registrations.csv
-    data["rooms"]          rows of rooms.csv
-    data["teachers"]       rows of teachers.csv
-    data["teaching"]       rows of teaching.csv
-    data["students"]       one row per line of every sections/<section>.csv,
-                           with the section ID added
-    data["roster_files"]   section IDs that have a file in sections/
-    data["settings"]       settings.yaml as a dict
-    data["constraints"]    constraints.yaml as a dict
-
-A "row" is a dict of column -> value, plus "_row": the line number in the
-file, counting the header as row 1 (the same number a spreadsheet shows).
+A row is a dict of column -> text, plus "_row": its line number in the file,
+counting the header as row 1, as a spreadsheet shows it.
 """
 
 import csv
+import datetime
 from pathlib import Path
 
 import yaml
 
-# File name -> the exact header it must have (data_design_spec.md section 2)
+# file key -> the header the file must have (data_design_spec.md section 2)
 CSV_COLUMNS = {
-    "sections.csv": ["section_id", "cohort_id", "program", "year"],
-    "courses.csv": ["course_code", "title", "cohort_id", "kind"],
-    "registrations.csv": ["student_id", "course_code"],
-    "rooms.csv": ["room_id", "type", "rows", "seat_columns"],
-    "teachers.csv": ["teacher_id", "rank"],
-    "teaching.csv": ["teacher_id", "course_code", "section_id"],
+    "sections": ["section_id", "cohort_id", "program", "year"],
+    "courses": ["course_code", "title", "cohort_id", "kind"],
+    "registrations": ["student_id", "course_code"],
+    "rooms": ["room_id", "type", "rows", "seat_columns"],
+    "teachers": ["teacher_id", "rank"],
+    "teaching": ["teacher_id", "course_code", "section_id"],
 }
-ROSTER_FOLDER = "sections"
 ROSTER_COLUMNS = ["student_id"]
-YAML_FILES = ["settings.yaml", "constraints.yaml"]
+
+
+def input_paths(input_dir):
+    """Where each input lives inside an input folder. "students" is the folder
+    of roster files, one per section."""
+    folder = Path(input_dir)
+    paths = {}
+    for key in CSV_COLUMNS:
+        paths[key] = folder / f"{key}.csv"
+    paths["students"] = folder / "sections"
+    paths["settings"] = folder / "settings.yaml"
+    paths["constraints"] = folder / "constraints.yaml"
+    return paths
+
+
+def roster_paths(students_folder):
+    """Every roster file, sorted by name so the order never changes."""
+    return sorted(Path(students_folder).glob("*.csv"))
 
 
 def read_csv_lines(path):
-    """Read a CSV file. Returns (header, rows).
-
-    header is a list of column names. rows is a list of
-    (row_number, values). Spaces around values are removed, fully blank
-    lines are skipped, and a byte-order mark (added by Excel) is ignored.
-    """
+    """Returns (header, rows), rows as (line number, values). Values are
+    stripped, blank lines skipped, and Excel's byte-order mark ignored."""
     header = []
     rows = []
     with open(path, newline="", encoding="utf-8-sig") as file:
@@ -55,7 +61,7 @@ def read_csv_lines(path):
         for values in reader:
             values = [value.strip() for value in values]
             if not any(values):
-                continue  # blank line
+                continue
             if not header:
                 header = values
             else:
@@ -64,41 +70,51 @@ def read_csv_lines(path):
 
 
 def read_table(path):
-    """Read a CSV file into a list of row dicts (see the module docstring)."""
     header, rows = read_csv_lines(path)
     return [dict(zip(header, values), _row=number) for number, values in rows]
 
 
 def read_yaml(path):
-    """Read a YAML file. An empty file gives an empty dict."""
+    """An empty file gives an empty dict."""
     with open(path, encoding="utf-8-sig") as file:
         content = yaml.safe_load(file)
-    return content if content is not None else {}
+    if content is None:
+        return {}
+    return content
 
 
-def roster_paths(input_dir):
-    """All section roster files, sorted by name so the order never changes."""
-    return sorted((Path(input_dir) / ROSTER_FOLDER).glob("*.csv"))
+def as_date(value):
+    """A YAML date (2026-11-02) or 'YYYY-MM-DD' text as a date, else None."""
+    # a date with a time is not what settings.yaml wants; datetime is a
+    # kind of date in Python, so it is ruled out first
+    if isinstance(value, datetime.datetime):
+        return None
+    if isinstance(value, datetime.date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
 
 
-def load(input_dir):
-    """Read every file of an input folder. See the module docstring."""
-    input_dir = Path(input_dir)
+def load(paths):
+    """Read every input. `paths` is what input_paths() gives back."""
     data = {}
-    for file_name in CSV_COLUMNS:
-        table_name = file_name.removesuffix(".csv")
-        data[table_name] = read_table(input_dir / file_name)
+    for key in CSV_COLUMNS:
+        data[key] = read_table(paths[key])
 
     data["students"] = []
     data["roster_files"] = []
-    for path in roster_paths(input_dir):
-        section_id = path.stem
-        data["roster_files"].append(section_id)
+    folder_name = Path(paths["students"]).name
+    for path in roster_paths(paths["students"]):
+        data["roster_files"].append(path.stem)
         for row in read_table(path):
-            row["section_id"] = section_id
-            row["_file"] = f"{ROSTER_FOLDER}/{path.name}"
+            row["section_id"] = path.stem
+            row["_file"] = f"{folder_name}/{path.name}"
             data["students"].append(row)
 
-    data["settings"] = read_yaml(input_dir / "settings.yaml")
-    data["constraints"] = read_yaml(input_dir / "constraints.yaml")
+    data["settings"] = read_yaml(paths["settings"])
+    data["constraints"] = read_yaml(paths["constraints"])
     return data

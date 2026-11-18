@@ -123,7 +123,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     # Stage 1: are the files there and readable?
-    problems = validate.check_files(args.input_dir)
+    problems = validate.check_folder(args.input_dir)
     if problems:
         print(validate.format_report(problems))
         print("\nFix these first. The checks on the data inside the files "
@@ -131,7 +131,7 @@ def main(argv=None):
         return 1
 
     # Stage 2: is the data inside the files right?
-    data = loader.load(args.input_dir)
+    data = loader.load(loader.input_paths(args.input_dir))
     problems = validate.check_data(data)
     if problems:
         print(validate.format_report(problems))
