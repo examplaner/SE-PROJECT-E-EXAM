@@ -62,9 +62,16 @@ def test_the_app_makes_the_same_plan_as_the_command_line(dataset, tmp_path):
                     "--output", str(tmp_path / "command_line")], check=True,
                    capture_output=True)
     command_line_folder = next((tmp_path / "command_line").iterdir())
-    app_files = sorted(path.relative_to(app_folder) for path in app_folder.rglob("*.*"))
-    command_line_files = sorted(path.relative_to(command_line_folder)
-                                for path in command_line_folder.rglob("*.*"))
+    app_files = []
+    for path in app_folder.rglob("*"):
+        if path.is_file():
+            app_files.append(path.relative_to(app_folder))
+    command_line_files = []
+    for path in command_line_folder.rglob("*"):
+        if path.is_file():
+            command_line_files.append(path.relative_to(command_line_folder))
+    app_files.sort()
+    command_line_files.sort()
     assert app_files == command_line_files
     for name in app_files:
         assert (app_folder / name).read_bytes() == (command_line_folder / name).read_bytes(), name
@@ -82,7 +89,7 @@ def test_no_plan_gives_the_engines_reason_and_only_why_txt(tmp_path):
     assert why.read_text(encoding="utf-8").strip() == str(caught.value).strip()
 
 
-def test_a_missing_file_is_an_input_problem(tmp_path):
+def test_a_missing_file_is_an_input_problem():
     selected = inputs_of(SMALL_EXAMPLE)
     selected["courses"] = SMALL_EXAMPLE / "not-there.csv"
     with pytest.raises(planner.InputProblem) as caught:

@@ -7,7 +7,6 @@ The timetable is written first; the seating and duties only after the second
 yes. Each part is checked by the engine's own checker before it is shown.
 """
 
-import copy
 import hashlib
 import json
 import sys
@@ -84,7 +83,7 @@ def load_selected(selected, settings):
         data = loader.load(selected)
     except OSError as error:
         raise InputProblem(f"An input file can't be read: {error}") from error
-    data["settings"] = copy.deepcopy(settings)
+    data["settings"] = settings
     problems = validate.check_data(data)
     if problems:
         raise InputProblem(validate.format_report(problems))
@@ -103,6 +102,7 @@ def is_safe_file_name(name):
     if name in ("", ".", "..") or name.endswith(".") or name.endswith(" "):
         return False
     for character in name:
+        # characters Windows forbids in a name, and control characters
         if character in '<>:"/\\|?*' or ord(character) < 32:
             return False
     return name.split(".")[0].upper() not in RESERVED_NAMES
@@ -208,7 +208,7 @@ def save_failure(reason, output_root=OUTPUT):
 
 
 def recovery_for(reason):
-    """"dates" when changing the exam dates can fix the reason, else "choose"."""
+    """Returns "dates" when other exam dates can fix the reason, else "choose"."""
     for line in str(reason).splitlines():
         if line.startswith("Rule: "):
             rule = line[len("Rule: "):].strip()

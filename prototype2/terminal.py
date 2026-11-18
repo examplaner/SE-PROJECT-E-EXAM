@@ -17,6 +17,8 @@ def ask(message, choices, default=None):
     options = []
     for title, value, description in choices:
         options.append(questionary.Choice(title, value=value, description=description))
+    # unsafe_ask() lets Ctrl+C through as KeyboardInterrupt; ask() would print
+    # its own message
     try:
         return questionary.select(message, choices=options, default=default).unsafe_ask()
     except KeyboardInterrupt:

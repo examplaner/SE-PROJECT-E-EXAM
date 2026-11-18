@@ -11,8 +11,6 @@ ui is the terminal module in the app (a fake one in the tests): it asks and
 shows. backend is the planner module: it makes and writes the plan.
 """
 
-import copy
-
 from calendars import ExamCalendar
 
 
@@ -35,7 +33,7 @@ def run_workflow(ui, backend):
             # a new or changed settings file starts the calendars again
             if exam_calendar is None or settings != file_settings:
                 exam_calendar = ExamCalendar.from_settings(settings)
-                file_settings = copy.deepcopy(settings)
+                file_settings = settings
             step = "range"
 
         elif step == "range":
@@ -65,6 +63,7 @@ def run_workflow(ui, backend):
 def run_summary(exam_calendar):
     """What the run will use, shown before the timetable is made."""
     settings = exam_calendar.effective_settings()
+    # effective_settings() lists every no-exam day of the range as a holiday
     days = (exam_calendar.end - exam_calendar.start).days + 1 - len(settings["holidays"])
     sessions = ", ".join(str(session) for session in settings["sessions"])
     return (f"{exam_calendar.start} to {exam_calendar.end}: {days} exam days\n"
@@ -88,15 +87,17 @@ def make_timetable(ui, backend, selected, exam_calendar):
         # a gap or exam-day problem is fixed with other dates
         if backend.recovery_for(error) == "dates":
             return None, "range"
+        next_steps = ["range", "inputs", "exit"]
         answer = ui.choose("What would you like to change?", ["Exam dates", "Input files", "Exit"])
-        return None, ["range", "inputs", "exit"][answer]
+        return None, next_steps[answer]
     except backend.InputProblem as error:
         ui.pause(f"{error}\nTerms: {backend.TERMS}\nBack to the inputs; your choices are kept.")
         return None, "inputs"
     except (OSError, RuntimeError) as error:
         ui.pause(f"The timetable was not made: {error}\nTerms: {backend.TERMS}")
+        next_steps = ["timetable", "inputs", "exit"]
         answer = ui.choose("Try again or go back?", ["Try again", "Back to inputs", "Exit"])
-        return None, ["timetable", "inputs", "exit"][answer]
+        return None, next_steps[answer]
     except KeyboardInterrupt:
         ui.pause("Stopped. Your choices are kept; back to the exam dates.")
         return None, "range"
@@ -124,5 +125,6 @@ def write_seating(ui, backend, plan):
             f"Terms: {folder / 'terms.md'}\n"
             f"Plan check passed: {counts['papers']} papers, {counts['room files']} room files, "
             f"{counts['seats']} seats, {counts['duties']} duties.")
+    next_steps = ["inputs", "exit"]
     answer = ui.choose(f"Plan saved in {folder}", ["Back to the inputs", "Exit"])
-    return ["inputs", "exit"][answer]
+    return next_steps[answer]

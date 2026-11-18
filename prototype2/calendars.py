@@ -76,8 +76,9 @@ def choose_dates(exam_calendar, mode):
 
 
 class CalendarDialog:
-    """One calendar window. It works on a copy, so Back or closing the window
-    keeps the dates as they were."""
+    """One calendar window. It works on a copy of the dates. Back, Continue
+    and closing the window all keep what was clicked, except a backwards
+    range: then Continue is refused, and Back keeps the dates as they were."""
 
     def __init__(self, exam_calendar, mode):
         self.original = exam_calendar
@@ -144,6 +145,7 @@ class CalendarDialog:
         try:
             year = int(self.year.get())
             month = int(self.month.get())
+            # raises ValueError if this is not a real month
             datetime.date(year, month, 1)
         except (ValueError, tkinter.TclError):
             self.status.set("Enter a month from 1 to 12 and a year from 1 to 9999, then Show.")
@@ -190,24 +192,29 @@ class CalendarDialog:
                 if number == 0:
                     continue
                 day = datetime.date(year, month, number)
-                self.day_button(day).grid(row=row, column=column, padx=2, pady=2)
+                self.day_cell(day).grid(row=row, column=column, padx=2, pady=2)
         if self.state.start > self.state.end:
             self.status.set("Choose an end date on or after the start date before continuing.")
         else:
             self.status.set("These dates are for this run only. The settings file stays "
                             "unchanged.")
 
-    def day_button(self, day):
+    def day_cell(self, day):
+        """One day of the month: a label that reacts to a click. Not a button,
+        because macOS draws buttons itself and ignores their colour."""
         inside = self.state.start <= day <= self.state.end
-        button = tkinter.Button(self.grid, text=str(day.day), width=7, height=2,
-                                command=lambda: self.select(day))
+        cell = tkinter.Label(self.grid, text=str(day.day), width=7, height=2,
+                             relief="raised", borderwidth=1)
         if self.mode == "exclusions" and not inside:
-            button.configure(state="disabled")
-        elif self.mode == "exclusions" and self.state.excluded(day):
-            button.configure(background="#a32929", foreground="white")
+            # outside the range: shown grey, and a click does nothing
+            cell.configure(foreground="grey")
+            return cell
+        if self.mode == "exclusions" and self.state.excluded(day):
+            cell.configure(background="#a32929", foreground="white")
         elif self.mode == "range" and inside:
-            button.configure(background="#245a81", foreground="white")
-        return button
+            cell.configure(background="#245a81", foreground="white")
+        cell.bind("<Button-1>", lambda event: self.select(day))
+        return cell
 
     def finish(self, action):
         if self.state.start > self.state.end:

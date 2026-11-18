@@ -6,8 +6,10 @@ old choice, clearing a choice never touches its file, and no input file is
 ever written.
 """
 
+import tkinter
 from dataclasses import dataclass
 from pathlib import Path
+from tkinter import filedialog
 
 # where the pickers start browsing
 EXAMPLE_DATA = Path(__file__).resolve().parent / "data" / "realistic_example"
@@ -43,6 +45,7 @@ def pick_inputs(selected, ask, pick, check, show):
     path, or None on Cancel; it is choose_path() in the app. check(item,
     path) gives a problem or None; it is path_problem() in the app. show
     prints a message. Returns True to go on to the exam dates, False to exit."""
+    # searching after the last input starts at the first one
     current = next_missing(selected, len(INPUTS) - 1)
     show("Choose each input. Your choices stay selected when you come back here.")
     while True:
@@ -173,13 +176,6 @@ def path_problem(item, path):
 def choose_path(item, previous=None):
     """Open a Tkinter file or folder picker. Returns the path, or None on
     Cancel."""
-    # imported here, so the rest of the app and its tests work without Tkinter
-    try:
-        import tkinter
-        from tkinter import filedialog
-    except ImportError as error:
-        raise RuntimeError("This Python has no Tkinter, so it can't open pickers.") from error
-
     if previous is None:
         start = EXAMPLE_DATA
     elif item.suffixes:

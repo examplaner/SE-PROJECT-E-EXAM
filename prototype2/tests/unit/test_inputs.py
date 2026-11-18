@@ -104,7 +104,8 @@ def test_continue_checks_the_paths_again():
 
     def check(item, path):
         checks.append(item.key)
-        if len(checks) > 9 and item.key == "teachers":
+        # the first round of checks is the choosing; the next is Continue
+        if len(checks) > len(inputs.INPUTS) and item.key == "teachers":
             return "The file no longer exists."
         return None
 
