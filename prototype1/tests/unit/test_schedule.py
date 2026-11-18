@@ -1,85 +1,71 @@
 """Step 4, the timetable (model spec section 8)."""
 
 import datetime
-from functools import lru_cache
 
 import pytest
 
 import duties
-import loader
 import schedule
-import seat
-from conftest import (REALISTIC_DATASET, SMALL_DATASET, m_room, made_up_exam, made_up_paper,
-                      run_main, s_room)
+from conftest import (REALISTIC_DATASET, SMALL_DATASET, exam_of, m_room, made_up_exam,
+                      made_up_paper, plan_of, run_main, s_room)
 from errors import NoPlan
-from exam import build_exam
 
 BOTH_DATASETS = [SMALL_DATASET, REALISTIC_DATASET]
 DAY_1 = datetime.date(2026, 11, 2)
 DAY_2 = datetime.date(2026, 11, 3)
 
 
-def exam_of(dataset):
-    return build_exam(loader.load(loader.input_paths(dataset)))
-
-
-# remember the result, so each dataset is scheduled once for all tests
-@lru_cache
-def scheduled(dataset):
-    """(exam, placements, the way that made them, the ways that failed)."""
-    exam = exam_of(dataset)
-    placements, way, failed = schedule.make_schedule(exam)
-    return exam, placements, way, failed
-
-
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_every_paper_gets_exactly_one_slot(dataset):
-    exam, placements, _, _ = scheduled(dataset)
-    assert sorted(p.paper.paper_id for p in placements) == sorted(exam.papers)
+    planned = plan_of(dataset)
+    paper_ids = [placement.paper.paper_id for placement in planned.placements]
+    assert sorted(paper_ids) == sorted(planned.exam.papers)
 
 
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_gap_rule_for_every_student(dataset):
-    exam, placements, _, _ = scheduled(dataset)
+    planned = plan_of(dataset)
     dates_of = {}
-    for placement in placements:
+    for placement in planned.placements:
         for student in placement.paper.students:
             dates_of.setdefault(student, []).append(placement.date)
     for student, dates in dates_of.items():
         dates.sort()
         for first, second in zip(dates, dates[1:]):
-            assert (second - first).days >= exam.gap, (student, first, second)
+            assert (second - first).days >= planned.exam.gap, (student, first, second)
 
 
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_only_exam_days_and_the_two_sessions_are_used(dataset):
-    exam, placements, _, _ = scheduled(dataset)
-    for placement in placements:
-        assert placement.date in exam.days
-        assert placement.session in exam.sessions
+    planned = plan_of(dataset)
+    for placement in planned.placements:
+        assert placement.date in planned.exam.days
+        assert placement.session in planned.exam.sessions
 
 
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_no_session_has_more_students_than_one_paper_per_room_seats(dataset):
-    exam, placements, _, _ = scheduled(dataset)
+    planned = plan_of(dataset)
     students_in = {}
-    for placement in placements:
+    for placement in planned.placements:
         slot = (placement.date, placement.session)
         students_in[slot] = students_in.get(slot, 0) + len(placement.paper.students)
-    assert max(students_in.values()) <= schedule.seat_limit(exam.rooms)
+    assert max(students_in.values()) <= schedule.seat_limit(planned.exam.rooms)
 
 
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_every_teacher_has_a_room_for_each_paper_they_teach(dataset):
-    exam, placements, _, _ = scheduled(dataset)
-    seating = seat.make_seating(placements, exam)
-    for slot, plans in seating.items():
-        papers = [p.paper for p in placements if (p.date, p.session) == slot]
-        assert duties.teachers_without_room(papers, plans, exam) == [], slot
+    planned = plan_of(dataset)
+    for slot, plans in planned.seating.items():
+        papers = []
+        for placement in planned.placements:
+            if (placement.date, placement.session) == slot:
+                papers.append(placement.paper)
+        assert duties.teachers_without_room(papers, plans, planned.exam) == [], slot
 
 
 def test_same_input_gives_same_schedule():
-    _, first, _, _ = scheduled(REALISTIC_DATASET)
+    first = plan_of(REALISTIC_DATASET).placements
     second, _, _ = schedule.make_schedule(exam_of(REALISTIC_DATASET))
     assert first == second
 
@@ -93,16 +79,19 @@ def test_small_schedule_worked_out_by_hand():
     # MTH2001 (5) waits in 6 Nov morning, and PHY2002 (5) fills it.
     # BIO2001 and PHY2001 (3 each) fit in 6 Nov morning, so they go there
     #   (an empty evening alone would only be waiting).
-    _, placements, way, failed = scheduled(SMALL_DATASET)
-    got = {(p.paper.paper_id, p.date.day, p.session) for p in placements}
+    planned = plan_of(SMALL_DATASET)
+    got = set()
+    for placement in planned.placements:
+        got.add((placement.paper.paper_id, placement.date.day, placement.session))
     assert got == {
         ("CSE2001", 2, "morning"),
         ("CSE2002", 4, "morning"), ("ECE2001", 4, "morning"),
         ("MTH2001", 6, "morning"), ("PHY2002", 6, "morning"),
         ("BIO2001", 6, "morning"), ("PHY2001", 6, "morning"),
     }
-    assert way == schedule.FEWEST_ROOMS_FEWER_STUDENTS and failed == []
-    line = schedule.basis_line(way, failed)
+    assert planned.way == schedule.FEWEST_ROOMS_FEWER_STUDENTS
+    assert planned.failed == []
+    line = schedule.basis_line(planned.way, planned.failed)
     assert "(on a tie, the session with fewer students)." in line
     assert "Tried first" not in line
 
@@ -110,11 +99,11 @@ def test_small_schedule_worked_out_by_hand():
 def test_realistic_dataset_falls_back_to_the_next_way_and_says_so():
     # the first way can't place ECE2003 (the gap rule leaves it no day), so
     # the second way makes the plan and the basis line says so
-    _, placements, way, failed = scheduled(REALISTIC_DATASET)
-    assert len(placements) == 56
-    assert way == schedule.FEWEST_ROOMS_EARLIER_DAY
-    assert failed == [schedule.FEWEST_ROOMS_FEWER_STUDENTS]
-    line = schedule.basis_line(way, failed)
+    planned = plan_of(REALISTIC_DATASET)
+    assert len(planned.placements) == 56
+    assert planned.way == schedule.FEWEST_ROOMS_EARLIER_DAY
+    assert planned.failed == [schedule.FEWEST_ROOMS_FEWER_STUDENTS]
+    line = schedule.basis_line(planned.way, planned.failed)
     assert "(on a tie, the earlier day)." in line
     assert ('Tried first, but could not place every paper: '
             f'"{schedule.FEWEST_ROOMS_FEWER_STUDENTS}".') in line
@@ -154,7 +143,10 @@ def placed_by(way, sizes, rooms, sessions):
     exam = made_up_exam(papers, rooms, days=[DAY_1, DAY_2], sessions=sessions)
     clashes = schedule.build_clashes(exam.papers)
     placements = schedule.place_papers(way, exam, clashes, {})
-    return {p.paper.paper_id: (p.date, p.session) for p in placements}
+    places = {}
+    for placement in placements:
+        places[placement.paper.paper_id] = (placement.date, placement.session)
+    return places
 
 
 def test_a_paper_goes_where_it_adds_the_fewest_rooms():

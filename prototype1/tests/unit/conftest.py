@@ -7,6 +7,7 @@ Run from prototype1/:
 
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -15,8 +16,12 @@ PROTOTYPE = Path(__file__).resolve().parents[2]
 # the planner's modules sit in prototype1/
 sys.path.insert(0, str(PROTOTYPE))
 
+import duties  # noqa: E402
+import loader  # noqa: E402
 import main  # noqa: E402
-from exam import Exam, Paper, Room  # noqa: E402
+import schedule  # noqa: E402
+import seat  # noqa: E402
+from exam import Exam, Paper, Room, build_exam  # noqa: E402
 
 # 16 students, 3 rooms, 9 teachers, one week: small enough to check by hand
 SMALL_DATASET = PROTOTYPE / "data" / "tiny"
@@ -68,6 +73,44 @@ def made_up_exam(papers, rooms, section_of=None, teaching=None, rank_of=None,
     papers_by_id = {paper.paper_id: paper for paper in papers}
     return Exam(papers_by_id, rooms, section_of, teaching or {}, rank_of, days or [],
                 sessions or ["morning", "evening"], 2, per_room)
+
+
+def exam_of(dataset):
+    return build_exam(loader.load(loader.input_paths(dataset)))
+
+
+@dataclass
+class Planned:
+    exam: Exam
+    placements: list
+    # the way of choosing sessions that made the schedule, and those that failed
+    way: str
+    failed: list
+    seating: dict
+    duty_rows: list
+
+
+# dataset -> its Planned; each dataset is planned once for all the tests
+PLANS = {}
+
+
+def plan_of(dataset):
+    """The whole plan of a dataset, made the way main.py makes it."""
+    if dataset not in PLANS:
+        exam = exam_of(dataset)
+        placements, way, failed = schedule.make_schedule(exam)
+        seating = seat.make_seating(placements, exam)
+        duty_rows = duties.make_duties(seating, exam)
+        PLANS[dataset] = Planned(exam, placements, way, failed, seating, duty_rows)
+    return PLANS[dataset]
+
+
+def replace_once(path, old, new):
+    """Change a file a test breaks on purpose. The text must be in it
+    exactly once, so the change is the one the test means."""
+    text = path.read_text(encoding="utf-8")
+    assert text.count(old) == 1, f"test setup: {old!r} in {path}"
+    path.write_text(text.replace(old, new), encoding="utf-8")
 
 
 def run_main(input_dir, output_dir, capsys):

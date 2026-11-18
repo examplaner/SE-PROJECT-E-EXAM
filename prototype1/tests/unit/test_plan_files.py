@@ -69,5 +69,6 @@ def test_a_second_run_in_the_same_second_gets_its_own_folder(tmp_path):
     first = writer.new_plan_folder(tmp_path)
     second = writer.new_plan_folder(tmp_path)
     assert first != second
+    # the first 19 characters are YYYY-MM-DD_HH-MM-SS
     if first.name[:19] == second.name[:19]:
         assert second.name == first.name + "_2"

@@ -3,18 +3,12 @@ dataset on purpose, and main.py stops with exit code 1 and names the problem."""
 
 import pytest
 
-from conftest import REALISTIC_DATASET, SMALL_DATASET, run_main
+from conftest import REALISTIC_DATASET, SMALL_DATASET, replace_once, run_main
 
 
 def add_line(path, line):
     with open(path, "a", encoding="utf-8") as file:
         file.write(line + "\n")
-
-
-def replace_once(path, old, new):
-    text = path.read_text(encoding="utf-8")
-    assert old in text, f"test setup: {old!r} is not in {path.name}"
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
 @pytest.mark.parametrize("dataset", [SMALL_DATASET, REALISTIC_DATASET])

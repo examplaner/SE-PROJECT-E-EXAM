@@ -1,16 +1,12 @@
 """Step 5, the seating (model spec section 9)."""
 
-from functools import lru_cache
-
 import pytest
 
-import loader
 import room_mix
-import schedule
 import seat
-from conftest import REALISTIC_DATASET, SMALL_DATASET, m_room, made_up_exam, made_up_paper, s_room
+from conftest import (REALISTIC_DATASET, SMALL_DATASET, m_room, made_up_exam, made_up_paper,
+                      plan_of, s_room)
 from errors import NoPlan
-from exam import build_exam
 
 BOTH_DATASETS = [SMALL_DATASET, REALISTIC_DATASET]
 
@@ -107,7 +103,8 @@ def test_papers_of_a_slot_share_its_rooms():
     plans = seat_papers([made_up_paper("A", 21), made_up_paper("B", 21)],
                         [s_room("S01"), s_room("S02"), m_room("M01")])
     assert room_ids(plans) == ["S01", "S02", "M01"]
-    assert plans[0].papers == plans[1].papers != plans[2].papers
+    assert plans[0].papers == plans[1].papers
+    assert plans[1].papers != plans[2].papers
 
 
 def test_room_options_never_have_a_spare_room():
@@ -270,38 +267,35 @@ def test_no_join_breaks_roll_order():
 
 # the rules on both datasets
 
-@lru_cache
-def seated(dataset):
-    """(placements, seating) of a dataset, worked out once."""
-    exam = build_exam(loader.load(loader.input_paths(dataset)))
-    placements, _, _ = schedule.make_schedule(exam)
-    return placements, seat.make_seating(placements, exam)
-
-
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_every_student_gets_exactly_one_seat_per_paper(dataset):
-    placements, seating = seated(dataset)
-    for placement in placements:
-        plans = seating[(placement.date, placement.session)]
+    planned = plan_of(dataset)
+    for placement in planned.placements:
+        plans = planned.seating[(placement.date, placement.session)]
         assert sorted(fill_order(plans, placement.paper.paper_id)) == sorted(
             placement.paper.students)
 
 
 @pytest.mark.parametrize("dataset", BOTH_DATASETS)
 def test_column_rule_two_papers_at_most_and_roll_order(dataset):
-    _, seating = seated(dataset)
-    for slot, plans in seating.items():
+    for slot, plans in plan_of(dataset).seating.items():
         assert len(room_ids(plans)) == len(set(room_ids(plans))), slot
         for plan in plans:
             papers_in_column = []
             for column in range(len(plan.grid[0])):
-                papers = {row[column][0] for row in plan.grid if row[column]}
+                papers = set()
+                for row in plan.grid:
+                    if row[column]:
+                        papers.add(row[column][0])
                 assert len(papers) <= 1, (slot, plan.room_id)
                 papers_in_column.append(papers)
             for left, right in zip(papers_in_column, papers_in_column[1:]):
                 assert not left & right, (slot, plan.room_id)
             assert len(plan.papers) <= 2
-        for paper_id in {paper_id for plan in plans for paper_id in plan.papers}:
+        papers_here = set()
+        for plan in plans:
+            papers_here.update(plan.papers)
+        for paper_id in papers_here:
             order = fill_order(plans, paper_id)
             assert order == sorted(order), (slot, paper_id)
 
@@ -311,11 +305,13 @@ def test_a_shared_room_holds_only_the_last_students_of_two_papers(dataset):
     # where the rooms don't run out, two papers share a room only as two
     # leftovers joined: each paper is in at most one shared room, and the
     # students there are its last ones in roll order
-    placements, seating = seated(dataset)
-    exam = build_exam(loader.load(loader.input_paths(dataset)))
-    for slot, plans in seating.items():
-        papers = {p.paper.paper_id: p.paper for p in placements if (p.date, p.session) == slot}
-        if seat.seat_in_room_order(list(papers.values()), exam) is None:
+    planned = plan_of(dataset)
+    for slot, plans in planned.seating.items():
+        papers = {}
+        for placement in planned.placements:
+            if (placement.date, placement.session) == slot:
+                papers[placement.paper.paper_id] = placement.paper
+        if seat.seat_in_room_order(list(papers.values()), planned.exam) is None:
             continue
         shared_rooms = {}
         for plan in plans:

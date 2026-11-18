@@ -12,8 +12,9 @@ plans=("$work"/plans/*)
 schedule="${plans[0]}/schedule.csv"
 
 # The date sheet has a header line and one line per paper: 8 lines, 7 papers.
+# (( )) compares numbers, so the spaces Mac's wc puts before the count don't matter.
 lines=$(wc -l < "$schedule")
-if [[ $lines != 8 ]]; then
+if (( lines != 8 )); then
     fail "expected 7 papers in schedule.csv, found $((lines - 1))"
 fi
 

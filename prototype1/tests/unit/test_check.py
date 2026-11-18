@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 import check
-from conftest import IMPOSSIBLE_DATASETS, REALISTIC_DATASET, SMALL_DATASET, run_main
+from conftest import IMPOSSIBLE_DATASETS, REALISTIC_DATASET, SMALL_DATASET, replace_once, run_main
 
 ROOMS_2_NOV = Path("daywise_seating_plans") / "2026-11-02" / "morning"
 S01_2_NOV = ROOMS_2_NOV / "S01.csv"
@@ -45,12 +45,6 @@ def rules_named(printed):
         if line.startswith("Rule: "):
             names.add(line[len("Rule: "):].rsplit(" (", 1)[0])
     return names
-
-
-def replace_once(path, old, new):
-    text = path.read_text(encoding="utf-8")
-    assert text.count(old) == 1, f"test setup: {old!r} in {path}"
-    path.write_text(text.replace(old, new), encoding="utf-8")
 
 
 @pytest.mark.parametrize("dataset, numbers", [
@@ -104,12 +98,12 @@ def one_paper_per_column(plan, _):
     replace_once(plan / S01_6_NOV, "\n,,\n", "\nPHY2002:BT2ECOM0006,,\n")
 
 
-def gap(plan, input_dir):
+def gap(_, input_dir):
     # the plan was made with a gap of 2 days
     replace_once(input_dir / "settings.yaml", "min_gap_days: 2", "min_gap_days: 3")
 
 
-def holiday(plan, input_dir):
+def holiday(_, input_dir):
     replace_once(input_dir / "settings.yaml", "holidays: []", "holidays: [2026-11-04]")
 
 

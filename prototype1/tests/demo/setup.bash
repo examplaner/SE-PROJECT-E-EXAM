@@ -36,10 +36,13 @@ fail() {
 # run COMMAND...: run it and show what it printed. The printed text is kept
 # in $output and the exit code in $code. Windows ends lines with \r\n, so the
 # \r is removed to make the text checks work the same on every system.
+# The cases run Python with -B, so it writes no .pyc files into the repo.
 run() {
     echo
     echo "\$ $*"
     code=0
+    # "|| code=$?" keeps the exit code, and stops set -e from ending the case
+    # when the command fails, as many cases expect it to
     output=$("$@" 2>&1) || code=$?
     output=${output//$'\r'/}
     echo "$output"
@@ -62,6 +65,8 @@ expect_text() {
 
 # expect_one_line TEXT FILE: exactly one line of the file holds the text, so
 # the change a case makes to the file is the change it means to make.
+# The cases then change a file with sed into a new file and mv it into place,
+# not with sed -i, which takes different arguments on Linux and Mac.
 expect_one_line() {
     if [[ $(grep -c -F -- "$1" "$2") != 1 ]]; then
         fail "expected '$1' on exactly one line of $2"

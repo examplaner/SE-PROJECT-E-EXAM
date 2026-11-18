@@ -2,17 +2,14 @@
 ask."""
 
 import datetime
-from functools import lru_cache
 
 import pytest
 
 import duties
-import loader
-import schedule
 import seat
-from conftest import REALISTIC_DATASET, SMALL_DATASET
+from conftest import REALISTIC_DATASET, SMALL_DATASET, plan_of
 from errors import NoPlan
-from exam import PHD, Exam, build_exam
+from exam import PHD, Exam, Paper
 
 DAY_1 = datetime.date(2026, 11, 2)
 DAY_2 = datetime.date(2026, 11, 3)
@@ -51,6 +48,14 @@ def teachers_of_rooms(rows):
     return found
 
 
+def rows_of_slot(rows, day, session):
+    slot_rows = []
+    for row_day, row_session, room_id, teacher_id in rows:
+        if (row_day, row_session) == (day, session):
+            slot_rows.append((row_day, row_session, room_id, teacher_id))
+    return slot_rows
+
+
 def test_first_choice_is_a_room_with_the_paper_but_none_of_own_students():
     assert rooms_for({("P", "A_I")}, [R1, R2, R3]) == ["R2"]
 
@@ -68,7 +73,7 @@ def test_teachers_without_room_skips_phd_scholars():
     exam = hand_exam({"T1": "ASST", "T2": "PHD"},
                      {"T1": {("P", "A_I"), ("P", "A_II")},
                       "T2": {("P", "A_I"), ("P", "A_II")}}, per_room=2)
-    p_paper = schedule.Paper("P", ["P"], {"a1", "a2"})
+    p_paper = Paper("P", ["P"], {"a1", "a2"})
     assert duties.teachers_without_room([p_paper], [R1, R2], exam) == [("T1", "P")]
 
 
@@ -119,7 +124,10 @@ def test_a_second_shift_on_one_day_comes_after_fewest_duties():
 
     exam = hand_exam({"T1": "ASST", "T2": "ASST"}, {}, per_room=1)
     rows = duties.make_duties({(DAY_1, "morning"): [R3], (DAY_1, "evening"): [R3]}, exam)
-    assert [(row[1], row[3]) for row in rows] == [("morning", "T1"), ("evening", "T2")]
+    sessions_and_teachers = []
+    for _, session, _, teacher_id in rows:
+        sessions_and_teachers.append((session, teacher_id))
+    assert sessions_and_teachers == [("morning", "T1"), ("evening", "T2")]
 
 
 def test_no_plan_when_the_teachers_run_out():
@@ -158,22 +166,14 @@ def test_one_own_paper_with_no_room_is_no_plan():
     assert "every room in this slot has their own students" in str(error.value)
 
 
-@lru_cache
-def staffed(dataset):
-    """(exam, seating, duty rows) of a dataset, worked out once."""
-    exam = build_exam(loader.load(loader.input_paths(dataset)))
-    placements, _, _ = schedule.make_schedule(exam)
-    seating = seat.make_seating(placements, exam)
-    return exam, seating, duties.make_duties(seating, exam)
-
-
 @pytest.mark.parametrize("dataset", [SMALL_DATASET, REALISTIC_DATASET])
 def test_every_duty_rule_holds_on_both_datasets(dataset):
-    exam, seating, rows = staffed(dataset)
-    for (day, session), plans in seating.items():
-        slot_rows = [row for row in rows if row[:2] == (day, session)]
+    planned = plan_of(dataset)
+    exam = planned.exam
+    for (day, session), plans in planned.seating.items():
+        slot_rows = rows_of_slot(planned.duty_rows, day, session)
         in_room = teachers_of_rooms(slot_rows)
-        teachers = [row[3] for row in slot_rows]
+        teachers = [teacher_id for _, _, _, teacher_id in slot_rows]
         # one duty per slot, and every room has its teachers
         assert len(teachers) == len(set(teachers))
         assert set(in_room) == {plan.room_id for plan in plans}
@@ -181,20 +181,23 @@ def test_every_duty_rule_holds_on_both_datasets(dataset):
         for plan in plans:
             assert len(in_room[plan.room_id]) == exam.per_room
             for teacher_id in in_room[plan.room_id]:
-                assert not contents[plan.room_id] & exam.teaching.get(teacher_id, set())
+                own_students_here = contents[plan.room_id] & exam.teaching.get(teacher_id, set())
+                assert not own_students_here
         # every regular teacher of a paper here sits in a room that counts
-        papers_here = {paper_id for plan in plans for paper_id in plan.papers}
+        papers_here = set()
+        for plan in plans:
+            papers_here.update(plan.papers)
         for teacher_id, teaches in exam.teaching.items():
             if exam.rank_of[teacher_id] == PHD:
                 continue
-            mine = [row[2] for row in slot_rows if row[3] == teacher_id]
-            for paper_id in {paper for paper, _ in teaches} & papers_here:
+            mine = [room_id for _, _, room_id, teacher in slot_rows if teacher == teacher_id]
+            for paper_id in duties.papers_taught(teaches, papers_here):
                 assert mine and mine[0] in duties.rooms_for_paper(paper_id, teaches, plans,
                                                                   contents)
 
 
 def test_duties_are_spread_on_the_realistic_dataset():
-    exam, _, rows = staffed(REALISTIC_DATASET)
-    numbers = duties.duty_summary(rows, exam)
+    planned = plan_of(REALISTIC_DATASET)
+    numbers = duties.duty_summary(planned.duty_rows, planned.exam)
     assert numbers["phd_duties"] == 0
     assert numbers["most"] - numbers["fewest"] <= 1
