@@ -1,60 +1,97 @@
-# Terminal controls for the exam planner
+# Exam planner app (prototype 2)
 
-## Purpose, from Krish's request
+The exam planner of prototype 1, driven from menus instead of a command line. Nobody types a path:
 
-> I want to work on the terminal-based control.
-> A person should not have to put the path of the file.
-> For those where we have multiple files we will go for the folder for now,
-> and for the single file we will go for the file.
+- the nine inputs are chosen in file and folder pickers;
+- the exam range and the no-exam days are chosen in two calendars, with the settings file's weekdays and
+  holidays already marked;
+- the app asks before it makes the timetable, and again before it writes the seating plan;
+- if no plan is possible it shows the planner's reason, and you change the dates or the inputs without
+  starting over.
 
-Cancel returns to the input menu and keeps the selections already made.
-Krish's reason: "I don't want to lose the whole progress."
+The planning is prototype 1's: `engine/` is an exact copy of its planner and checker, so the same inputs give
+the same plan. `data/` holds copies of its two example datasets, so this app runs on its own.
 
-## Current step: select inputs
+## Set up
 
-From the repository folder:
+You need Python 3.10 or newer with Tkinter. In a terminal, in the `prototype2/` folder:
 
-```powershell
-python -B prototype2/input_selection.py
+**Windows (PowerShell):**
+
+```
+py -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Choose a numbered input in the terminal. A file picker opens for a single
-CSV or YAML file; a folder picker opens for all student-section CSVs.
-The pickers initially browse `prototype1/data/main`. No input is selected
-automatically. Select the `sections` folder for the student lists and
-`sections.csv` for the section information.
+**Linux and Mac:**
 
-The program remembers each choice while it runs. You can revisit any input
-to replace it. Cancel closes the picker and returns to the menu without
-changing any previous choice. Enter `done` to review the complete selection,
-or `q` to leave the program. Choices are kept in memory, not saved between runs.
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-This step checks that selected paths exist, file extensions match, files can
-be opened, and the student folder has CSV files. It does not yet validate
-CSV columns or relationships, open calendars, or generate an exam plan.
-No source file is written, renamed, or copied. `demo` is not used.
+That installs PyYAML (settings files), questionary (the arrow-key menus) and pytest (the tests). Tkinter comes
+with Python on Windows and from python.org on Mac; on Debian or Ubuntu it is `sudo apt install python3-tk`.
 
-Tkinter is Python's standard interface for desktop windows; its file-dialog
-functions provide the file and folder pickers. No third-party package is
-needed for this step. Some Python distributions omit Tkinter; the program
-reports that problem without losing current choices.
+## Run
+
+```
+python app.py
+```
+
+Run it in an interactive terminal: PowerShell, Command Prompt or Windows Terminal on Windows (Git Bash's
+window can't show the menus), the normal terminal on Linux and Mac.
+
+1. **Inputs.** Up/Down move and Enter chooses; the menus go round at the ends. Enter on an input opens its
+   picker, which starts in `data/realistic_example`; after a choice the menu moves on to the next input not
+   chosen yet. Choose `sections.csv` for the section information and the `sections` folder for the student
+   lists. Cancel in a picker keeps the old choice. "Clear a choice" clears one choice; its file is never
+   touched. Ctrl+C keeps every choice.
+2. **Exam range.** In the first calendar, click the first exam day, then the last. Back returns to the inputs.
+3. **No-exam days.** Red days have no exams. Click a day to switch it. Back returns to the range.
+4. **Make the timetable?** Yes makes the whole plan, so it checks seats and teachers too, then saves and checks
+   the timetable. No returns to the inputs.
+5. **Write the seating plan?** Yes writes the seating plan and duties and checks the whole plan.
+
+Choices stay in memory while the app runs. The settings file and the other inputs are only read.
+
+## What comes out
+
+Every run gets a new folder under `output/`, named by the time; nothing is ever overwritten:
+
+```
+output/2026-11-19_10-15-00_x1y2z3/
+├── settings.yaml        the settings of this run, with the dates from the calendars
+├── sources.json         the input files used, with a fingerprint (SHA-256) of each
+├── timetable/           schedule.csv, basis.txt and terms.md
+└── seating_x4y5z6/      the full plan: schedule.csv, duties.csv, basis.txt, terms.md
+                         and daywise_seating_plans/<date>/<session>/<room>.csv
+```
+
+Each Yes to the seating plan makes a new `seating_*` folder. When no plan is possible, the run's folder holds
+only `why.txt`. A folder that could not be finished holds `INCOMPLETE.txt`. The files are described in
+prototype 1's `README.md`.
 
 ## Tests
 
-```powershell
-python -B -m unittest discover -s prototype2/tests -v
+```
+python -m pytest tests/unit
 ```
 
-Tests use Python's built-in `unittest` library and replace the actual dialogs
-with controlled selections. They read the existing `main` data; they do not
-generate or modify datasets. Check the actual picker visually as well.
+They use scripted answers instead of a person, so no menu, picker or calendar opens. One test checks that the
+app's plan files are byte for byte the same as the command line's (`engine/main.py`). The windows themselves
+need a person to try them.
 
-## Agreed later steps
+## The code
 
-- Separate Tkinter calendars for the exam range and no-exam dates.
-- Initially show holidays and excluded weekdays from the selected settings.
-- Read sessions, minimum exam gap, and invigilators per room from that file.
-- Use existing data as read-only input and write outputs only to new locations.
-- Connect the planner and independent checker in later approved steps.
-
-Each step needs Krish's review before proceeding to the next.
+| File | What it does |
+|---|---|
+| `app.py` | Starts the app. |
+| `flow.py` | The steps in order, with their back and retry loops. |
+| `terminal.py` | How the app asks: questionary menus and yes/no questions, the pickers and the calendars. |
+| `inputs.py` | The nine inputs, the inputs menu, the path checks and the file and folder pickers. |
+| `calendars.py` | The two calendars and the dates behind them. |
+| `planner.py` | Runs the engine on the chosen files and writes each run's folder. |
+| `engine/` | prototype 1's planner, checker and `docs/terms.md`, copied unchanged. |
