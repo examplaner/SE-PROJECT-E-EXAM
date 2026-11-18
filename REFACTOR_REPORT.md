@@ -8,12 +8,12 @@ is picked up after a break. Branch `abhishek/refactor`, made from `main` (= tag 
 | Piece | State |
 |---|---|
 | 1. Setup and baseline | done |
-| 2. prototype1 loader and validate | next |
-| 3. prototype1 planning engine | to do |
-| 4. `check.py` | to do |
-| 5. generator | to do |
-| 6. prototype1 unit tests | to do |
-| 7. demo cases | to do |
+| 2. prototype1 loader and validate | done |
+| 3. prototype1 planning engine | done |
+| 4. `check.py` | done |
+| 5. generator | done |
+| 6. prototype1 unit tests | done (134 pass) |
+| 7. demo cases | next |
 | 8. prototype1 README, requirements, cleanup | to do |
 | 9. prototype2 | to do |
 | 10. final comparison, review, report | to do |
