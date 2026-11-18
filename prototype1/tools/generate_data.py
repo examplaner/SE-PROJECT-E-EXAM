@@ -1,23 +1,20 @@
-"""Generate prototype1's input folders: data/tiny and data/main.
-
-Run from prototype1/:
+"""Write prototype1's two input folders, data/tiny and data/main.
 
     python tools/generate_data.py
 
-Every number comes from docs/data_design_spec.md section 8. All the numbers
-sit in TINY and MAIN below, so they can be changed and the script re-run.
-The same SEED always gives the same files.
+Every number comes from docs/data_design_spec.md section 8 and sits in TINY
+and MAIN below, so it can be changed and the script run again. The same SEED
+always gives the same files.
 
-How it works, in order:
-  1. make sections and students (50 per section, IDs like BT2CSE0001)
-  2. give every student their cohort's cores, and hand out electives randomly
-     so each elective gets exactly the number of students in the spec
-  3. give every (cohort, subject) its own course code; a subject written by
+In order:
+  1. sections and students (IDs like BT2CSE0001)
+  2. every student gets their cohort's cores, and electives are handed out at
+     random so each elective gets exactly the number of students in the spec
+  3. every (cohort, subject) gets its own course code; a subject written by
      several cohorts is one paper, so its codes go in constraints.yaml
-  4. split each paper's sections into teaching groups and give each group
-     a teacher
-  5. write the CSV and YAML files, then read them back and run the checks
-     from data_design_spec.md section 3
+  4. each paper's sections are split into teaching groups, one teacher each
+  5. the files are written, read back and checked with the planner's own
+     input checks (validate.py)
 """
 
 import csv
@@ -30,18 +27,21 @@ from pathlib import Path
 
 import yaml
 
+PROTOTYPE = Path(__file__).resolve().parent.parent
+# the planner's modules sit one folder up
+sys.path.insert(0, str(PROTOTYPE))
+import loader  # noqa: E402
+import validate  # noqa: E402
+
 SEED = 2026
 
-# Room shapes (model spec section 9): type -> (rows, seat columns)
+# room type -> (rows, seat columns), model spec section 9
 ROOM_SHAPES = {"S": (6, 3), "M": (7, 6)}
-
-TEACHER_RANKS = ["PROF", "ASSOC", "ASST", "PHD"]
-
 ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
 
-# Subject key -> (title, department). The department becomes the course
-# code prefix. The same key in two cohorts means the same question paper.
-# Discrete Maths has two keys because BT2 and BT3 write different papers.
+# subject key -> (title, department). The department starts the course code.
+# The same key in two cohorts is the same question paper; Discrete Maths has
+# two keys because BT2 and BT3 write different papers.
 SUBJECTS = {
     # BTech 2nd year
     "lade": ("Linear Algebra & Differential Equations", "MTH"),
@@ -106,9 +106,8 @@ SUBJECTS = {
 }
 
 
-def cohort(cohort_id, program, year, sections, cores, electives=None,
-           electives_per_student=0):
-    """One cohort's design. electives maps subject key -> number of students."""
+def cohort(cohort_id, program, year, sections, cores, electives=None, electives_per_student=0):
+    """One cohort's design. electives: subject key -> number of students."""
     return {
         "id": cohort_id,
         "program": program,
@@ -126,18 +125,15 @@ MAIN = {
     "name": "main",
     "section_size": 50,
     "cohorts": [
-        cohort("BT2CSE", "BTECH", 2, 7,
-               BT2_COMMON + ["dsa", "web", "dld", "oops"],
+        cohort("BT2CSE", "BTECH", 2, 7, BT2_COMMON + ["dsa", "web", "dld", "oops"],
                {"dm_bt2": 150, "semi_phy": 90, "quantum": 70, "modeling_life": 40}, 1),
         cohort("BT2ECOM", "BTECH", 2, 1,
                BT2_COMMON + ["dsa", "web", "dld", "sigsys", "sensors_iot"]),
         cohort("BT2ME", "BTECH", 2, 1,
                BT2_COMMON + ["robotics_iot", "thermo", "eng_materials", "sensors_iot"]),
-        cohort("BT3CSE", "BTECH", 3, 7,
-               ["ml", "coa", "ai", "iot", "coding_skills", "dm_bt3"],
+        cohort("BT3CSE", "BTECH", 3, 7, ["ml", "coa", "ai", "iot", "coding_skills", "dm_bt3"],
                {"ads": 160, "big_data": 70, "cedha": 50, "sad": 40, "applied_db": 30}, 1),
-        cohort("BT3ECOM", "BTECH", 3, 1,
-               ["ml", "coa", "mpmc", "vlsi", "coding_skills"],
+        cohort("BT3ECOM", "BTECH", 3, 1, ["ml", "coa", "mpmc", "vlsi", "coding_skills"],
                {"ads": 50}, 1),
         cohort("BT4CSE", "BTECH", 4, 7, [],
                {"agentic_ai": 200, "nlp": 150, "idt": 120, "cyber_forensics": 90,
@@ -152,12 +148,12 @@ MAIN = {
                {"bim": 50, "ethics": 50, "org_beh": 50}, 1),
     ],
     "rooms": {"S": 18, "M": 18},
-    # 85 teachers: 10 PhD scholars; the other 75 split 20% / 30% / 50%
+    # 85 teachers: 10 PhD scholars; the other 75 are 20% / 30% / 50%
     "teachers": {"PROF": 15, "ASSOC": 22, "ASST": 38, "PHD": 10},
-    # A core paper's sections are split into groups of at most this many
-    # sections, with at least 2 groups when there are 2+ sections.
+    # a core paper's sections are split into groups of at most this many
+    # sections, and at least 2 groups when it has 2 or more sections
     "max_sections_per_core_group": 3,
-    # An elective with this many students or more gets 2 teachers (2026-10-28).
+    # an elective with this many students or more gets 2 teachers
     "big_elective_size": 150,
     "settings": {
         "start_date": datetime.date(2026, 11, 2),
@@ -174,8 +170,7 @@ TINY = {
     "name": "tiny",
     "section_size": 8,
     "cohorts": [
-        cohort("BT2CSE", "BTECH", 2, 1, ["dsa", "oops"],
-               {"dm_bt2": 5, "semi_phy": 3}, 1),
+        cohort("BT2CSE", "BTECH", 2, 1, ["dsa", "oops"], {"dm_bt2": 5, "semi_phy": 3}, 1),
         cohort("BT2ECOM", "BTECH", 2, 1, ["dsa", "sigsys"],
                {"quantum": 5, "modeling_life": 3}, 1),
     ],
@@ -196,35 +191,86 @@ TINY = {
 
 DATASETS = [TINY, MAIN]
 
-# Exact headers from data_design_spec.md section 2
-HEADERS = {
-    "sections.csv": ["section_id", "cohort_id", "program", "year"],
-    "courses.csv": ["course_code", "title", "cohort_id", "kind"],
-    "registrations.csv": ["student_id", "course_code"],
-    "rooms.csv": ["room_id", "type", "rows", "seat_columns"],
-    "teachers.csv": ["teacher_id", "rank"],
-    "teaching.csv": ["teacher_id", "course_code", "section_id"],
-}
-
 
 class DesignError(Exception):
-    """The numbers in a dataset design don't add up."""
+    """The numbers of a dataset design don't add up."""
 
 
-# ---------------------------------------------------------------- building
+def main():
+    failed = False
+    for design in DATASETS:
+        out_dir = PROTOTYPE / "data" / design["name"]
+        print(f"{design['name']}: writing {out_dir}")
+        try:
+            codes, registrations, assigned, teachers = build_dataset(design, out_dir)
+        except DesignError as error:
+            print(f"  design error: {error}")
+            failed = True
+            continue
+        print_summary(design, codes, registrations, assigned, teachers)
+        problems = check_folder(out_dir)
+        if problems:
+            failed = True
+            print("  " + validate.format_report(problems).replace("\n", "\n  "))
+        else:
+            print("  checks passed")
+    if failed:
+        return 1
+    return 0
+
+
+def build_dataset(design, out_dir):
+    """Write one input folder. Returns what print_summary() needs."""
+    rng = random.Random(SEED)
+    section_rows, students_by_section, students_by_cohort = make_sections_and_students(design)
+    codes = make_course_codes(design)
+
+    # every core, plus the electives handed out
+    registrations = []
+    for c in design["cohorts"]:
+        chosen = allocate_electives(c["id"], students_by_cohort[c["id"]], c["electives"],
+                                    c["electives_per_student"], rng)
+        for student in students_by_cohort[c["id"]]:
+            for subject in c["cores"] + chosen[student]:
+                registrations.append((student, codes[(c["id"], subject)]))
+
+    groups = make_teaching_groups(design, codes, registrations, students_by_section)
+    teachers = make_teachers(design)
+    assigned = assign_teachers(groups, teachers, rng)
+    teaching_rows = make_teaching_rows(assigned, codes, registrations, students_by_section)
+
+    # write everything fresh
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    (out_dir / "sections").mkdir(parents=True)
+
+    write_csv(out_dir / "sections.csv", loader.CSV_COLUMNS["sections"], section_rows)
+    for section_id, members in students_by_section.items():
+        write_csv(out_dir / "sections" / f"{section_id}.csv", loader.ROSTER_COLUMNS,
+                  [[student] for student in members])
+    write_csv(out_dir / "courses.csv", loader.CSV_COLUMNS["courses"], make_course_rows(design, codes))
+    write_csv(out_dir / "registrations.csv", loader.CSV_COLUMNS["registrations"], registrations)
+    write_csv(out_dir / "rooms.csv", loader.CSV_COLUMNS["rooms"], make_room_rows(design))
+    write_csv(out_dir / "teachers.csv", loader.CSV_COLUMNS["teachers"], teachers)
+    write_csv(out_dir / "teaching.csv", loader.CSV_COLUMNS["teaching"], teaching_rows)
+    write_yaml(out_dir / "settings.yaml", design["settings"])
+    write_yaml(out_dir / "constraints.yaml", {"same_paper": same_paper_groups(design, codes)})
+    return codes, registrations, assigned, teachers
+
 
 def make_sections_and_students(design):
-    """Return (section rows, {section_id: [student_id, ...]}, {cohort_id: [student_id, ...]})."""
+    """Returns (rows of sections.csv, {section_id: students},
+    {cohort_id: students}). Roll numbers run on across a cohort's sections."""
     section_rows = []
     students_by_section = {}
     students_by_cohort = {}
     for c in design["cohorts"]:
         if c["sections"] > len(ROMAN):
             raise DesignError(f"{c['id']}: more than {len(ROMAN)} sections")
-        number = 1  # roll numbers run on across the cohort's sections
+        number = 1
         students_by_cohort[c["id"]] = []
-        for s in range(c["sections"]):
-            section_id = f"{c['id']}_{ROMAN[s]}"
+        for index in range(c["sections"]):
+            section_id = f"{c['id']}_{ROMAN[index]}"
             section_rows.append([section_id, c["id"], c["program"], c["year"]])
             members = []
             for _ in range(design["section_size"]):
@@ -236,16 +282,14 @@ def make_sections_and_students(design):
 
 
 def allocate_electives(cohort_id, students, electives, per_student, rng):
-    """Give each student `per_student` different electives, with exact totals.
+    """Give each student `per_student` different electives, with the exact
+    number of students per elective.
 
-    The elective names are laid out in one long list, grouped by elective
-    (e.g. 150 x dm_bt2, then 90 x semi_phy, ...). The students are shuffled,
-    then list position i goes to student number (i mod number_of_students).
-
-    With 2 electives each, a student gets positions i and i + n. Those are
-    always different electives, because no elective has more than n students,
-    so one elective's block is never long enough to cover both positions.
-    """
+    The elective names are laid out in one long list, one block per elective
+    (150 x dm_bt2, then 90 x semi_phy, ...). The students are shuffled, and
+    list position i goes to student number i mod n. With 2 electives each, a
+    student gets positions i and i + n, which are always different electives,
+    because no elective has more than n students."""
     result = {student: [] for student in students}
     if per_student == 0:
         if electives:
@@ -255,9 +299,8 @@ def allocate_electives(cohort_id, students, electives, per_student, rng):
     n = len(students)
     total = sum(electives.values())
     if total != n * per_student:
-        raise DesignError(
-            f"{cohort_id}: elective sizes add up to {total}, "
-            f"but {n} students x {per_student} = {n * per_student}")
+        raise DesignError(f"{cohort_id}: elective sizes add up to {total}, "
+                          f"but {n} students x {per_student} = {n * per_student}")
     for name, count in electives.items():
         if count < 1 or count > n:
             raise DesignError(f"{cohort_id}: elective {name} has {count} students, "
@@ -266,7 +309,6 @@ def allocate_electives(cohort_id, students, electives, per_student, rng):
     labels = []
     for name, count in electives.items():
         labels.extend([name] * count)
-
     order = list(students)
     rng.shuffle(order)
     for i, label in enumerate(labels):
@@ -275,11 +317,9 @@ def allocate_electives(cohort_id, students, electives, per_student, rng):
 
 
 def make_course_codes(design):
-    """Return {(cohort_id, subject): course_code}.
-
-    Codes look like CSE2003: department, year digit, then a 3-digit counter
-    per department and year. So a subject in two cohorts gets two codes.
-    """
+    """{(cohort_id, subject): course_code}. A code is the department, the
+    year digit and a counter per department and year, like CSE2003, so a
+    subject in two cohorts gets two codes."""
     counters = {}
     codes = {}
     for c in design["cohorts"]:
@@ -288,71 +328,11 @@ def make_course_codes(design):
                 raise DesignError(f"{c['id']}: unknown subject {subject}")
             if (c["id"], subject) in codes:
                 raise DesignError(f"{c['id']}: subject {subject} listed twice")
-            dept = SUBJECTS[subject][1]
-            key = (dept, c["year"])
+            department = SUBJECTS[subject][1]
+            key = (department, c["year"])
             counters[key] = counters.get(key, 0) + 1
-            codes[(c["id"], subject)] = f"{dept}{c['year']}{counters[key]:03d}"
+            codes[(c["id"], subject)] = f"{department}{c['year']}{counters[key]:03d}"
     return codes
-
-
-def split_evenly(items, parts):
-    """Split a list into `parts` contiguous chunks, bigger chunks first.
-    Example: 7 items into 3 parts -> sizes 3, 2, 2."""
-    chunks = []
-    start = 0
-    for p in range(parts):
-        size = len(items) // parts + (1 if p < len(items) % parts else 0)
-        chunks.append(items[start:start + size])
-        start += size
-    return chunks
-
-
-def make_teaching_groups(design, codes, registrations, students_by_section):
-    """Split each paper's sections into groups; each group gets one teacher.
-
-    A paper is one subject key, with all its cohorts' codes together.
-    - Core paper with 1 section: 1 group.
-    - Core paper with 2+ sections: groups of at most 3 sections, at least 2 groups.
-    - Elective paper (any of its codes is an elective): 2 groups if it has
-      150+ students in total, otherwise 1 group (2026-10-28 decision).
-    Returns a list of (subject, [section_id, ...]).
-    """
-    kind_of = {}
-    for c in design["cohorts"]:
-        for subject in c["cores"]:
-            kind_of[(c["id"], subject)] = "CORE"
-        for subject in c["electives"]:
-            kind_of[(c["id"], subject)] = "ELECTIVE"
-
-    registered = set(registrations)  # (student_id, course_code)
-    groups = []
-    for subject in subjects_in_order(design):
-        paper_codes = [(cid, code) for (cid, subj), code in codes.items() if subj == subject]
-        is_core = all(kind_of[(cid, subject)] == "CORE" for cid, _ in paper_codes)
-
-        sections = []
-        students = 0
-        for cid, code in paper_codes:
-            for section_id, members in students_by_section.items():
-                if not section_id.startswith(cid + "_"):
-                    continue
-                writers = sum(1 for s in members if (s, code) in registered)
-                if writers:
-                    sections.append(section_id)
-                    students += writers
-
-        if is_core:
-            if len(sections) == 1:
-                parts = 1
-            else:
-                parts = max(2, math.ceil(len(sections) / design["max_sections_per_core_group"]))
-        else:
-            parts = 2 if students >= design["big_elective_size"] else 1
-        parts = min(parts, len(sections))
-
-        for chunk in split_evenly(sections, parts):
-            groups.append((subject, chunk))
-    return groups
 
 
 def subjects_in_order(design):
@@ -365,11 +345,82 @@ def subjects_in_order(design):
     return seen
 
 
+def codes_of_subject(codes, subject):
+    """[(cohort_id, code), ...] of one subject, in cohort order."""
+    found = []
+    for (cohort_id, other), code in codes.items():
+        if other == subject:
+            found.append((cohort_id, code))
+    return found
+
+
+def split_evenly(items, parts):
+    """Split a list into `parts` chunks in order, bigger chunks first:
+    7 items into 3 parts gives sizes 3, 2, 2."""
+    chunks = []
+    start = 0
+    for part in range(parts):
+        size = len(items) // parts
+        if part < len(items) % parts:
+            size += 1
+        chunks.append(items[start:start + size])
+        start += size
+    return chunks
+
+
+def make_teaching_groups(design, codes, registrations, students_by_section):
+    """Split each paper's sections into groups, one teacher per group.
+    Returns [(subject, [section_id, ...]), ...].
+
+    A core paper with one section is one group; with more, groups of at most
+    max_sections_per_core_group sections and at least 2 groups. An elective
+    paper (any of its codes is an elective) gets 2 groups if it has
+    big_elective_size students or more in total, otherwise 1."""
+    kind_of = {}
+    for c in design["cohorts"]:
+        for subject in c["cores"]:
+            kind_of[(c["id"], subject)] = "CORE"
+        for subject in c["electives"]:
+            kind_of[(c["id"], subject)] = "ELECTIVE"
+
+    registered = set(registrations)
+    groups = []
+    for subject in subjects_in_order(design):
+        paper_codes = codes_of_subject(codes, subject)
+        is_core = all(kind_of[(cohort_id, subject)] == "CORE" for cohort_id, _ in paper_codes)
+
+        sections = []
+        students = 0
+        for cohort_id, code in paper_codes:
+            for section_id, members in students_by_section.items():
+                if not section_id.startswith(cohort_id + "_"):
+                    continue
+                writers = 0
+                for student in members:
+                    if (student, code) in registered:
+                        writers += 1
+                if writers:
+                    sections.append(section_id)
+                    students += writers
+
+        if not is_core:
+            parts = 2 if students >= design["big_elective_size"] else 1
+        elif len(sections) == 1:
+            parts = 1
+        else:
+            parts = max(2, math.ceil(len(sections) / design["max_sections_per_core_group"]))
+        parts = min(parts, len(sections))
+
+        for chunk in split_evenly(sections, parts):
+            groups.append((subject, chunk))
+    return groups
+
+
 def make_teachers(design):
-    """Return [(teacher_id, rank), ...]: PROF first, then ASSOC, ASST, PHD."""
+    """[(teacher_id, rank), ...]: PROF first, then ASSOC, ASST, PHD."""
     teachers = []
     number = 1
-    for rank in TEACHER_RANKS:
+    for rank in validate.TEACHER_RANKS:
         for _ in range(design["teachers"].get(rank, 0)):
             teachers.append((f"T{number:03d}", rank))
             number += 1
@@ -377,20 +428,19 @@ def make_teachers(design):
 
 
 def assign_teachers(groups, teachers, rng):
-    """Give each teaching group one non-PhD teacher.
+    """Give each teaching group one teacher who is not a PhD scholar.
+    Returns [(teacher_id, subject, [section_id, ...]), ...].
 
     Groups are taken in a shuffled order. Each goes to the teacher with the
-    fewest groups so far who doesn't already teach that paper (so a split
-    paper really has different teachers). Ties go to the earlier teacher in
-    a shuffled list, which mixes the ranks.
-    Returns [(teacher_id, subject, [section_id, ...]), ...].
-    """
-    faculty = [tid for tid, rank in teachers if rank != "PHD"]
+    fewest groups so far who doesn't already teach that paper, so a split
+    paper really has different teachers. Ties go to the earlier teacher in a
+    shuffled list, which mixes the ranks."""
+    faculty = [teacher_id for teacher_id, rank in teachers if rank != "PHD"]
     if not faculty:
         raise DesignError("no non-PhD teachers to teach")
     rng.shuffle(faculty)
-    load = {tid: 0 for tid in faculty}
-    papers_of = {tid: set() for tid in faculty}
+    load = {teacher_id: 0 for teacher_id in faculty}
+    papers_of = {teacher_id: set() for teacher_id in faculty}
 
     order = list(groups)
     rng.shuffle(order)
@@ -399,264 +449,81 @@ def assign_teachers(groups, teachers, rng):
         candidates = [t for t in faculty if subject not in papers_of[t]]
         if not candidates:
             raise DesignError(f"not enough teachers for paper {subject}")
-        teacher = min(candidates, key=lambda t: load[t])  # min keeps the first on ties
+        # min() keeps the first teacher on a tie
+        teacher = min(candidates, key=lambda t: load[t])
         load[teacher] += 1
         papers_of[teacher].add(subject)
         assigned.append((teacher, subject, sections))
     return assigned
 
 
-# ---------------------------------------------------------------- writing
-
-def write_csv(path, header, rows):
-    with open(path, "w", newline="") as f:
-        writer = csv.writer(f)
-        if header:
-            writer.writerow(header)
-        writer.writerows(rows)
-
-
-def build_dataset(design, out_dir):
-    rng = random.Random(SEED)
-
-    section_rows, students_by_section, students_by_cohort = make_sections_and_students(design)
-    codes = make_course_codes(design)
-
-    # Registrations: all cores, plus the allocated electives
-    registrations = []
-    for c in design["cohorts"]:
-        chosen = allocate_electives(c["id"], students_by_cohort[c["id"]], c["electives"],
-                                    c["electives_per_student"], rng)
-        for student in students_by_cohort[c["id"]]:
-            for subject in c["cores"] + chosen[student]:
-                registrations.append((student, codes[(c["id"], subject)]))
-
-    groups = make_teaching_groups(design, codes, registrations, students_by_section)
-    teachers = make_teachers(design)
-    assigned = assign_teachers(groups, teachers, rng)
-
+def make_teaching_rows(assigned, codes, registrations, students_by_section):
+    """Rows of teaching.csv, sorted: only where the section really has
+    students writing the code."""
     registered = set(registrations)
-    teaching_rows = []
+    rows = []
     for teacher, subject, sections in assigned:
         for section_id in sections:
             cohort_id = section_id.rsplit("_", 1)[0]
             code = codes[(cohort_id, subject)]
-            # only rows where this section really has students writing the code
-            if any((s, code) in registered for s in students_by_section[section_id]):
-                teaching_rows.append([teacher, code, section_id])
-    teaching_rows.sort()
+            for student in students_by_section[section_id]:
+                if (student, code) in registered:
+                    rows.append([teacher, code, section_id])
+                    break
+    rows.sort()
+    return rows
 
-    # Write everything fresh
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    (out_dir / "sections").mkdir(parents=True)
 
-    write_csv(out_dir / "sections.csv", HEADERS["sections.csv"], section_rows)
-    for section_id, members in students_by_section.items():
-        write_csv(out_dir / "sections" / f"{section_id}.csv", ["student_id"],
-                  [[s] for s in members])
-
-    course_rows = []
+def make_course_rows(design, codes):
+    rows = []
     for c in design["cohorts"]:
         for subject in c["cores"]:
-            course_rows.append([codes[(c["id"], subject)], SUBJECTS[subject][0], c["id"], "CORE"])
+            rows.append([codes[(c["id"], subject)], SUBJECTS[subject][0], c["id"], "CORE"])
         for subject in c["electives"]:
-            course_rows.append([codes[(c["id"], subject)], SUBJECTS[subject][0], c["id"], "ELECTIVE"])
-    write_csv(out_dir / "courses.csv", HEADERS["courses.csv"], course_rows)
+            rows.append([codes[(c["id"], subject)], SUBJECTS[subject][0], c["id"], "ELECTIVE"])
+    return rows
 
-    write_csv(out_dir / "registrations.csv", HEADERS["registrations.csv"], registrations)
 
-    room_rows = []
+def make_room_rows(design):
+    """S01, S02, ..., then M01, M02, ..."""
+    rows = []
     for room_type in ["S", "M"]:
-        rows, cols = ROOM_SHAPES[room_type]
-        for i in range(1, design["rooms"].get(room_type, 0) + 1):
-            room_rows.append([f"{room_type}{i:02d}", room_type, rows, cols])
-    write_csv(out_dir / "rooms.csv", HEADERS["rooms.csv"], room_rows)
+        seat_rows, seat_columns = ROOM_SHAPES[room_type]
+        for number in range(1, design["rooms"].get(room_type, 0) + 1):
+            rows.append([f"{room_type}{number:02d}", room_type, seat_rows, seat_columns])
+    return rows
 
-    write_csv(out_dir / "teachers.csv", HEADERS["teachers.csv"], teachers)
-    write_csv(out_dir / "teaching.csv", HEADERS["teaching.csv"], teaching_rows)
 
-    with open(out_dir / "settings.yaml", "w") as f:
-        yaml.safe_dump(design["settings"], f, sort_keys=False, default_flow_style=None)
-
-    same_paper = []
+def same_paper_groups(design, codes):
+    """The codes of each subject written by more than one cohort."""
+    groups = []
     for subject in subjects_in_order(design):
-        group = [code for (cid, subj), code in codes.items() if subj == subject]
+        group = [code for _, code in codes_of_subject(codes, subject)]
         if len(group) >= 2:
-            same_paper.append(group)
-    with open(out_dir / "constraints.yaml", "w") as f:
-        yaml.safe_dump({"same_paper": same_paper}, f, sort_keys=False, default_flow_style=None)
-
-    return codes, registrations, assigned, teachers
+            groups.append(group)
+    return groups
 
 
-# ---------------------------------------------------------------- checks
+def write_csv(path, header, rows):
+    with open(path, "w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(header)
+        writer.writerows(rows)
 
-def read_csv(path):
-    with open(path, newline="") as f:
-        return list(csv.reader(f))
+
+def write_yaml(path, content):
+    with open(path, "w", encoding="utf-8") as file:
+        yaml.safe_dump(content, file, sort_keys=False, default_flow_style=None)
 
 
 def check_folder(folder):
-    """Re-read a written input folder and check data_design_spec.md section 3.
-    Returns a list of problems; an empty list means everything is fine."""
-    problems = []
-    tables = {}
-
-    for name, header in HEADERS.items():
-        path = folder / name
-        if not path.exists():
-            problems.append(f"{name}: file missing")
-            continue
-        rows = read_csv(path)
-        if not rows or rows[0] != header:
-            problems.append(f"{name}: header should be {','.join(header)}")
-            continue
-        tables[name] = rows[1:]
-    for name in ["settings.yaml", "constraints.yaml"]:
-        if not (folder / name).exists():
-            problems.append(f"{name}: file missing")
+    """The planner's input checks on a written folder; empty means fine."""
+    paths = loader.input_paths(folder)
+    problems = validate.check_files(paths)
     if problems:
-        return problems  # can't check further without the files
+        return problems
+    return validate.check_data(loader.load(paths))
 
-    def unique_ids(name):
-        ids = {}
-        for i, row in enumerate(tables[name], start=2):
-            if not row or not row[0].strip():
-                problems.append(f"{name} row {i}: blank ID")
-            elif row[0] in ids:
-                problems.append(f"{name} row {i}: duplicate ID {row[0]}")
-            else:
-                ids[row[0]] = row
-        return ids
-
-    sections = unique_ids("sections.csv")
-    courses = unique_ids("courses.csv")
-    rooms = unique_ids("rooms.csv")
-    teachers = unique_ids("teachers.csv")
-
-    # Students: exactly one section each
-    section_of = {}
-    for section_id in sections:
-        path = folder / "sections" / f"{section_id}.csv"
-        if not path.exists():
-            problems.append(f"sections/{section_id}.csv: file missing")
-            continue
-        rows = read_csv(path)
-        if not rows or rows[0] != ["student_id"]:
-            problems.append(f"sections/{section_id}.csv: header should be student_id")
-            continue
-        for i, row in enumerate(rows[1:], start=2):
-            if not row or not row[0].strip():
-                problems.append(f"sections/{section_id}.csv row {i}: blank student ID")
-            elif row[0] in section_of:
-                problems.append(f"sections/{section_id}.csv row {i}: student {row[0]} "
-                                f"is also in {section_of[row[0]]}")
-            else:
-                section_of[row[0]] = section_id
-    for path in (folder / "sections").glob("*.csv"):
-        if path.stem not in sections:
-            problems.append(f"sections/{path.name}: section not in sections.csv")
-
-    # Registrations
-    seen = set()
-    students_with_reg = set()
-    codes_with_reg = set()
-    for i, row in enumerate(tables["registrations.csv"], start=2):
-        if len(row) != 2:
-            problems.append(f"registrations.csv row {i}: needs 2 columns")
-            continue
-        student, code = row
-        if student not in section_of:
-            problems.append(f"registrations.csv row {i}: student {student} is in no section file")
-            continue
-        if code not in courses:
-            problems.append(f"registrations.csv row {i}: course code {code} is not in courses.csv")
-            continue
-        if (student, code) in seen:
-            problems.append(f"registrations.csv row {i}: duplicate row")
-        seen.add((student, code))
-        student_cohort = sections[section_of[student]][1]
-        if courses[code][2] != student_cohort:
-            problems.append(f"registrations.csv row {i}: {student} ({student_cohort}) "
-                            f"registered for {code} of cohort {courses[code][2]}")
-        students_with_reg.add(student)
-        codes_with_reg.add(code)
-    for student in section_of:
-        if student not in students_with_reg:
-            problems.append(f"student {student} has no registration")
-    for code in courses:
-        if code not in codes_with_reg:
-            problems.append(f"courses.csv: course code {code} has no registration")
-
-    # Rooms and teachers
-    for i, row in enumerate(tables["rooms.csv"], start=2):
-        if len(row) != 4 or row[1] not in ROOM_SHAPES:
-            problems.append(f"rooms.csv row {i}: type must be S or M")
-            continue
-        if not (row[2].isdigit() and int(row[2]) > 0 and row[3].isdigit() and int(row[3]) > 0):
-            problems.append(f"rooms.csv row {i}: rows and seat_columns must be positive whole numbers")
-    for i, row in enumerate(tables["teachers.csv"], start=2):
-        if len(row) != 2 or row[1] not in TEACHER_RANKS:
-            problems.append(f"teachers.csv row {i}: rank must be one of {', '.join(TEACHER_RANKS)}")
-
-    # Teaching
-    for i, row in enumerate(tables["teaching.csv"], start=2):
-        if len(row) != 3:
-            problems.append(f"teaching.csv row {i}: needs 3 columns")
-            continue
-        teacher, code, section_id = row
-        if teacher not in teachers:
-            problems.append(f"teaching.csv row {i}: teacher {teacher} is not in teachers.csv")
-        if code not in courses:
-            problems.append(f"teaching.csv row {i}: course code {code} is not in courses.csv")
-            continue
-        if section_id not in sections:
-            problems.append(f"teaching.csv row {i}: section {section_id} is not in sections.csv")
-            continue
-        if courses[code][2] != sections[section_id][1]:
-            problems.append(f"teaching.csv row {i}: {code} is not offered to {section_id}'s cohort")
-        if not any((s, code) in seen for s, sec in section_of.items() if sec == section_id):
-            problems.append(f"teaching.csv row {i}: no student of {section_id} writes {code}")
-
-    # settings.yaml
-    with open(folder / "settings.yaml") as f:
-        settings = yaml.safe_load(f) or {}
-    start, end = settings.get("start_date"), settings.get("end_date")
-    if not isinstance(start, datetime.date) or not isinstance(end, datetime.date):
-        problems.append("settings.yaml: start_date and end_date must be valid dates")
-    elif start > end:
-        problems.append("settings.yaml: start_date is after end_date")
-    for day in settings.get("holidays") or []:
-        if not isinstance(day, datetime.date):
-            problems.append(f"settings.yaml: holiday {day} is not a valid date")
-    if len(settings.get("sessions") or []) != 2:
-        problems.append("settings.yaml: there must be exactly two sessions")
-    for key in ["min_gap_days", "invigilators_per_room"]:
-        value = settings.get(key)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-            problems.append(f"settings.yaml: {key} must be a whole number of at least 1")
-
-    # constraints.yaml
-    with open(folder / "constraints.yaml") as f:
-        constraints = yaml.safe_load(f) or {}
-    group_of = {}
-    for g, group in enumerate(constraints.get("same_paper") or [], start=1):
-        if not isinstance(group, list) or len(group) < 2:
-            problems.append(f"constraints.yaml same_paper group {g}: needs at least two codes")
-            continue
-        for code in group:
-            if code not in courses:
-                problems.append(f"constraints.yaml same_paper group {g}: {code} is not in courses.csv")
-            elif code in group_of:
-                problems.append(f"constraints.yaml: {code} is in groups {group_of[code]} and {g}")
-            else:
-                group_of[code] = g
-
-    return problems
-
-
-# ---------------------------------------------------------------- summary
 
 def print_summary(design, codes, registrations, assigned, teachers):
     students_per_code = {}
@@ -671,7 +538,7 @@ def print_summary(design, codes, registrations, assigned, teachers):
           f"{len(subjects_in_order(design))} papers, {len(teachers)} teachers")
     print(f"  {'paper':<40} {'students':>8}  teachers  codes")
     for subject in subjects_in_order(design):
-        paper_codes = [code for (cid, subj), code in codes.items() if subj == subject]
+        paper_codes = [code for _, code in codes_of_subject(codes, subject)]
         students = sum(students_per_code.get(code, 0) for code in paper_codes)
         print(f"  {SUBJECTS[subject][0]:<40} {students:>8}  "
               f"{len(teachers_per_subject.get(subject, [])):>8}  {', '.join(paper_codes)}")
@@ -679,36 +546,14 @@ def print_summary(design, codes, registrations, assigned, teachers):
     load = {}
     for teacher, _, _ in assigned:
         load[teacher] = load.get(teacher, 0) + 1
+    # number of paper groups -> number of teachers (not PhD) teaching that many
     counts = {}
-    for tid, rank in teachers:
+    for teacher_id, rank in teachers:
         if rank != "PHD":
-            counts[load.get(tid, 0)] = counts.get(load.get(tid, 0), 0) + 1
+            groups = load.get(teacher_id, 0)
+            counts[groups] = counts.get(groups, 0) + 1
     spread = ", ".join(f"{n} teach {k} paper group(s)" for k, n in sorted(counts.items()))
     print(f"  teaching load (non-PhD): {spread}")
-
-
-def main():
-    prototype_dir = Path(__file__).resolve().parent.parent
-    failed = False
-    for design in DATASETS:
-        out_dir = prototype_dir / "data" / design["name"]
-        print(f"{design['name']}: writing {out_dir}")
-        try:
-            codes, registrations, assigned, teachers = build_dataset(design, out_dir)
-        except DesignError as e:
-            print(f"  design error: {e}")
-            failed = True
-            continue
-        print_summary(design, codes, registrations, assigned, teachers)
-        problems = check_folder(out_dir)
-        if problems:
-            failed = True
-            print(f"  {len(problems)} problem(s):")
-            for p in problems:
-                print(f"    {p}")
-        else:
-            print("  checks passed")
-    return 1 if failed else 0
 
 
 if __name__ == "__main__":
