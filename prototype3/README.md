@@ -149,6 +149,14 @@ for case in tests/demo/[0-9]*.sh; do bash "$case" || break; done
 
 They use `python`, or `python3` if there is no `python`; set `PYTHON` to use another one.
 
+The same ten cases are in Python too, in `tests/demo/python_tests/`, for a computer without bash. Each one does
+what its bash case does, step for step. Run one, or all ten:
+
+```
+python tests/demo/python_tests/04_gap_window.py
+python tests/demo/python_tests/run_all.py
+```
+
 ## The code
 
 | File | What it does |
