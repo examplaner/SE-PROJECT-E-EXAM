@@ -47,7 +47,8 @@ def pick_inputs(selected, ask, pick, check, show):
     prints a message. Returns True to go on to the exam dates, False to exit."""
     # searching after the last input starts at the first one
     current = next_missing(selected, len(INPUTS) - 1)
-    show("Choose each input. Your choices stay selected when you come back here.")
+    show("Choose each input. Each file is checked when you choose it, and the checks across "
+         "files run when you continue. Your choices stay selected when you come back here.")
     while True:
         answer = ask("Exam planner - inputs", menu_choices(selected), current)
         if answer is None:
@@ -64,6 +65,13 @@ def pick_inputs(selected, ask, pick, check, show):
             current = clear_a_choice(selected, ask, show, current)
         else:
             current = choose_one(answer, selected, pick, check, show)
+
+
+def input_named(key):
+    """The Input with this key."""
+    for item in INPUTS:
+        if item.key == key:
+            return item
 
 
 def menu_choices(selected):
@@ -97,7 +105,7 @@ def choose_one(index, selected, pick, check, show):
     path = Path(path).resolve()
     problem = check(item, path)
     if problem:
-        show(f"{problem} Previous choices kept.")
+        show(f"{problem}\nPrevious choices kept.")
         return index
     selected[item.key] = path
     show(f"Chose {item.label.lower()}: {path}")
@@ -150,8 +158,8 @@ def first_problem(selected, check):
 
 
 def path_problem(item, path):
-    """Whether a chosen path can be used, or None. The data inside is checked
-    later, by the engine."""
+    """Whether a chosen path can be used, or None. check_input() in
+    terminal.py then runs the engine's checks on the file."""
     try:
         if not item.suffixes:
             if not path.is_dir():

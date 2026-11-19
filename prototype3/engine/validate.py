@@ -216,7 +216,8 @@ def check_rooms(data, problems):
             problems.append(Problem("rooms.csv", row["_row"], "room type is S or M",
                                     f"type of {room_id} is {row['type'] or '(blank)'}"))
         for column in ["rows", "seat_columns"]:
-            if not (row[column].isdigit() and int(row[column]) >= 1):
+            # isdecimal(), not isdigit(): "²" is a digit, but int() can't read it
+            if not (row[column].isdecimal() and int(row[column]) >= 1):
                 problems.append(Problem("rooms.csv", row["_row"],
                                         "rows and seat_columns are positive whole numbers",
                                         f"{column} of {room_id} is {row[column] or '(blank)'}"))

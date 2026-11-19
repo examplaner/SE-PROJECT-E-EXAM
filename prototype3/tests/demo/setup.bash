@@ -14,6 +14,7 @@ small_dataset=data/tiny
 realistic_dataset=data/main
 
 # The Python to run: $PYTHON if it is set, otherwise python, otherwise python3.
+# On Windows, set PYTHON if "python" opens the Microsoft Store.
 if [[ -z "${PYTHON:-}" ]]; then
     if command -v python >/dev/null 2>&1; then
         PYTHON=python

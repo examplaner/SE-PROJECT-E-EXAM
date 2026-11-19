@@ -1,14 +1,15 @@
 """The steps of the app, in order:
 
     inputs -> exam range -> no-exam days -> "make the timetable?"
-           -> "write the seating plan?"
+           -> "write the seating plan and teacher duties?"
 
 Every step can go back without losing what was chosen, and a failure shows
 the engine's reason and returns to the dates or the inputs instead of
 starting over.
 
 ui is the terminal module in the app (a fake one in the tests): it asks and
-shows. backend is the planner module: it makes and writes the plan.
+shows, and checks each file as it is picked. backend is the planner module:
+it checks the files together, and makes and writes the plan.
 """
 
 from calendars import ExamCalendar
@@ -27,6 +28,8 @@ def run_workflow(ui, backend):
                 return
             try:
                 settings = backend.read_settings(selected["settings"])
+                # the checks across files, before the calendars open
+                backend.load_selected(selected, settings)
             except backend.InputProblem as error:
                 ui.pause(f"{error}\nTerms: {backend.TERMS}")
                 continue
@@ -103,6 +106,7 @@ def make_timetable(ui, backend, selected, exam_calendar):
         return None, "range"
 
     ui.show(f"Timetable saved and checked: {plan.folder / 'timetable' / 'schedule.csv'}\n"
+            f"Basis: {plan.folder / 'timetable' / 'basis.txt'}\n"
             f"Terms: {plan.folder / 'timetable' / 'terms.md'}")
     return plan, "seating"
 
@@ -110,7 +114,7 @@ def make_timetable(ui, backend, selected, exam_calendar):
 def write_seating(ui, backend, plan):
     """Returns the next step."""
     timetable = plan.folder / "timetable" / "schedule.csv"
-    if not ui.confirm("Write the seating plan?",
+    if not ui.confirm("Write the seating plan and teacher duties?",
                       f"Timetable: {timetable}\nThe saved timetable stays if you go back."):
         return "inputs"
     ui.show("Writing the seating plan and checking it with the checker...")
@@ -122,6 +126,7 @@ def write_seating(ui, backend, plan):
         return "seating"
     ui.show(f"Seating plan: {folder / 'daywise_seating_plans'}\n"
             f"Teacher duties: {folder / 'duties.csv'}\n"
+            f"Basis: {folder / 'basis.txt'}\n"
             f"Terms: {folder / 'terms.md'}\n"
             f"Plan check passed: {counts['papers']} papers, {counts['room files']} room files, "
             f"{counts['seats']} seats, {counts['duties']} duties.")

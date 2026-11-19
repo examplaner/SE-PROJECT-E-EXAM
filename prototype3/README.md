@@ -50,13 +50,18 @@ window can't show the menus), the normal terminal on Linux and Mac.
    - Up/Down move and Enter chooses. Enter on an input opens its picker, which starts in `data/main`. After a
      choice, the menu moves on to the next input not chosen yet.
    - Choose `sections.csv` for the section information and the `sections` folder for the student lists.
+   - Each file is checked as soon as it is chosen: it must be readable, with the right header, and rooms,
+     teachers and settings must also pass the rules that need no other file. A file that fails is refused, and
+     the old choice stays.
    - Cancel in a picker keeps the old choice. "Clear a choice" clears one choice; its file is never touched.
    - Ctrl+C does not quit and loses nothing; choose Exit to leave.
+   - "Continue to exam dates" runs the checks across files, such as a registration for a course that isn't in
+     the courses file. If one fails, the problems show and the menu stays open.
 2. **Exam range.** In the first calendar, click the first exam day, then the last. Back returns to the inputs.
 3. **No-exam days.** Red days have no exams. Click a day to switch it. Back returns to the range.
 4. **Make the timetable?** Yes makes the timetable, seating and duties together, so a timetable is shown only if
    seats and teachers work out. Only the timetable is saved and checked now. No returns to the inputs.
-5. **Write the seating plan?** Yes writes the seating plan and duties and checks the whole plan.
+5. **Write the seating plan and teacher duties?** Yes writes them and checks the whole plan.
 
 If no plan is possible, the app shows the reason and goes back to the dates or the inputs, with every choice
 kept. Input files are only read. Each run gets a new folder under `output/`:
@@ -127,6 +132,7 @@ If no plan is possible, the folder holds only `why.txt`, with the reason that wa
 | `data/tiny` | The small example: 16 students in 2 sections, 3 rooms, 9 teachers, 2 to 6 Nov. Small enough to check by hand. |
 | `data/main` | The realistic example: 1,600 students in 32 sections of 10 cohorts (a cohort is a program and year, such as BTech CSE 2nd year), 56 papers, 36 rooms, 85 teachers, 2 to 20 Nov. Made up, not real data. |
 | `data/impossible/` | Seven copies of `tiny`, each broken on purpose so no plan is possible ([its README](data/impossible/README.md)). |
+| `data/invalid/` | Single files broken on purpose, to show the input checks ([its README](data/invalid/README.md)). |
 
 `python tools/generate_data.py` rewrites `data/tiny` and `data/main` from the `TINY` and `MAIN` settings in the
 script; the same settings always give the same files. It does not touch `data/impossible/`. The input files and their columns are in
@@ -158,6 +164,21 @@ what its bash case does, step for step. Run one, or all ten:
 python tests/demo/python_tests/04_gap_window.py
 python tests/demo/python_tests/run_all.py
 ```
+
+Krish's test runner shows one part of the planner at a time, in class. It is in bash and in Python too, with the
+same groups:
+
+```
+bash tests/run_tests.sh impossible
+python tests/run_tests.py impossible
+```
+
+| Group | What it shows |
+|---|---|
+| `app-checks` (the default) | The app's input checks without a person: a wrong header refused when the file is chosen, an unknown course found at "Continue", and the fixed file accepted (`tests/app_checks.py`). |
+| `impossible` | Plans the seven impossible datasets: each exits with 2, writes only `why.txt`, and names its rule. |
+| `validation`, `schedule`, `seating`, `duties`, `no-plan`, `checker`, `app` | The unit tests of that part. |
+| `all` | Every unit test. |
 
 ## The code
 

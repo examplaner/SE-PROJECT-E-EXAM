@@ -124,6 +124,14 @@ def test_a_date_that_does_not_exist_is_reported_not_a_crash(small_copy, tmp_path
     assert "settings.yaml: cannot be read as YAML (day is out of range for month)" in printed
 
 
+def test_a_superscript_digit_is_reported_not_a_crash(small_copy, tmp_path, capsys):
+    # "²" counts as a digit in Python, but int() can't read it
+    replace_once(small_copy / "rooms.csv", "S01,S,6,3", "S01,S,²,3")
+    code, printed, _ = run_main(small_copy, tmp_path / "out", capsys)
+    assert code == 1
+    assert "rows of S01 is ²" in printed
+
+
 def test_true_is_not_a_number_of_days(small_copy, tmp_path, capsys):
     # in Python True counts as 1, so it needs its own check
     replace_once(small_copy / "settings.yaml", "min_gap_days: 2", "min_gap_days: true")

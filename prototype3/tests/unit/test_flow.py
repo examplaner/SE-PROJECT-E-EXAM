@@ -129,3 +129,11 @@ def test_a_bad_settings_file_stays_in_the_inputs_menu(run):
     assert len(run.visits) == 2
     assert "settings.yaml: bad" in run.ui.pause.call_args.args[0]
     run.ui.pick_dates.assert_not_called()
+
+
+def test_a_problem_across_files_stays_in_the_inputs_menu(run):
+    run.backend.load_selected.side_effect = planner.InputProblem("row 50: course code CSE9999")
+    run.go()
+    assert run.visits[1] == CHOSEN
+    assert "row 50: course code CSE9999" in run.ui.pause.call_args.args[0]
+    run.ui.pick_dates.assert_not_called()

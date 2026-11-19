@@ -71,10 +71,55 @@ def read_settings(path):
     return settings
 
 
+def file_problem(key, path):
+    """The problems of one picked input on its own, as a report, or None. The
+    file must be readable with the right header; rooms, teachers and settings
+    must also pass the data rules that need no other file. The rules across
+    files run in load_selected(), once every input is chosen."""
+    problems = []
+    try:
+        if key == "students":
+            for roster in loader.roster_paths(path):
+                validate.check_csv_file(roster, f"{path.name}/{roster.name}",
+                                        loader.ROSTER_COLUMNS, problems)
+        elif key in ("settings", "constraints"):
+            validate.check_yaml_file(path, problems)
+        else:
+            validate.check_csv_file(path, path.name, loader.CSV_COLUMNS[key], problems)
+
+        if not problems:
+            if key == "rooms":
+                validate.check_rooms({"rooms": loader.read_table(path)}, problems)
+            elif key == "teachers":
+                validate.check_teachers({"teachers": loader.read_table(path)}, problems)
+            elif key == "settings":
+                validate.check_settings(loader.read_yaml(path), problems)
+    except OSError as error:
+        return f"{path.name} can't be read: {error}"
+    if not problems:
+        return None
+    name_picked_files(problems, {key: path})
+    return validate.format_report(problems)
+
+
+def name_picked_files(problems, selected):
+    """The checks name each input by its usual file name, such as
+    registrations.csv; change that to the name of the file that was picked."""
+    # only the file names are used, so the folder doesn't matter
+    usual_paths = loader.input_paths(".")
+    picked_name = {}
+    for key, path in selected.items():
+        if key != "students":
+            picked_name[usual_paths[key].name] = Path(path).name
+    for problem in problems:
+        if problem.file in picked_name:
+            problem.file = picked_name[problem.file]
+
+
 def load_selected(selected, settings):
     """Read and check the picked files with the engine's own checks. selected
-    uses the same keys as loader.input_paths(); settings are this run's
-    settings from the calendars. Raises InputProblem."""
+    uses the same keys as loader.input_paths(); settings are the settings
+    file's, or this run's from the calendars. Raises InputProblem."""
     try:
         problems = validate.check_files(selected)
         if problems:
@@ -85,6 +130,7 @@ def load_selected(selected, settings):
     data["settings"] = settings
     problems = validate.check_data(data)
     if problems:
+        name_picked_files(problems, selected)
         raise InputProblem(validate.format_report(problems))
 
     # room IDs and session names become file and folder names

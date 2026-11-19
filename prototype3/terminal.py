@@ -8,6 +8,7 @@ import questionary
 
 import calendars
 import inputs
+import planner
 
 
 def ask(message, choices, default=None):
@@ -26,7 +27,19 @@ def ask(message, choices, default=None):
 
 
 def pick_inputs(selected):
-    return inputs.pick_inputs(selected, ask, inputs.choose_path, inputs.path_problem, show)
+    return inputs.pick_inputs(selected, ask, inputs.choose_path, check_input, show)
+
+
+def check_input(item, path):
+    """A problem with a chosen path, or None: first the path itself, then the
+    file's own checks in the engine."""
+    problem = inputs.path_problem(item, path)
+    if problem:
+        return problem
+    report = planner.file_problem(item.key, path)
+    if report:
+        return f"{item.label}: this file can't be used.\n{report}"
+    return None
 
 
 def pick_dates(exam_calendar, mode):
