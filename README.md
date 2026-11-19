@@ -24,8 +24,7 @@ Each pair splits its own work.
 
 | Folder | Contents |
 |---|---|
-| `prototype1/` | First working version: input folder in, exam plan out. |
-| `prototype2/` | Terminal app: pick the inputs and dates, then make the plan. |
+| `prototype3/` | The exam planner: a terminal app to pick the inputs and dates, and a command line that takes an input folder. Both make the plan with the same engine. |
 | `agents/` | Rules for everyone working here, people and AI assistants, and optional skills. |
 | `docs/` | Submitted project plan and the list of decisions. |
 | `archive/` | Earlier attempts. Reference only. |
