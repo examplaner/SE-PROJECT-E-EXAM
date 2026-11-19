@@ -6,8 +6,8 @@ Give it the exam data, and it makes the whole exam plan:
 2. **a seating plan:** a picture of every room in use, showing who sits where;
 3. **invigilation duties:** which teachers sit in each room.
 
-The plan follows every rule in [`docs/prototype1_model_spec.md`](docs/prototype1_model_spec.md), or the tool
-says in a few lines why no plan is possible. A separate checker re-reads a plan and checks it against the rules
+The plan follows every rule in the model spec ([`docs/prototype1_model_spec.md`](docs/prototype1_model_spec.md)),
+or the tool says in a few lines why no plan is possible. A separate checker re-reads a plan and checks it against the rules
 on its own.
 
 There are two ways to run it: the **app**, where you pick the files and dates in menus and calendars, and the
@@ -46,14 +46,16 @@ python app.py
 Run it in an interactive terminal: PowerShell, Command Prompt or Windows Terminal on Windows (Git Bash's
 window can't show the menus), the normal terminal on Linux and Mac.
 
-1. **Inputs.** Up/Down move and Enter chooses. Enter on an input opens its picker, which starts in
-   `data/main`; after a choice the menu moves on to the next input not chosen yet. Choose `sections.csv` for
-   the section information and the `sections` folder for the student lists. Cancel in a picker keeps the old
-   choice. "Clear a choice" clears one choice; its file is never touched. Ctrl+C keeps every choice.
+1. **Inputs.**
+   - Up/Down move and Enter chooses. Enter on an input opens its picker, which starts in `data/main`. After a
+     choice, the menu moves on to the next input not chosen yet.
+   - Choose `sections.csv` for the section information and the `sections` folder for the student lists.
+   - Cancel in a picker keeps the old choice. "Clear a choice" clears one choice; its file is never touched.
+   - Ctrl+C does not quit and loses nothing; choose Exit to leave.
 2. **Exam range.** In the first calendar, click the first exam day, then the last. Back returns to the inputs.
 3. **No-exam days.** Red days have no exams. Click a day to switch it. Back returns to the range.
-4. **Make the timetable?** Yes makes the whole plan, so it checks seats and teachers too, then saves and checks
-   the timetable. No returns to the inputs.
+4. **Make the timetable?** Yes makes the timetable, seating and duties together, so a timetable is shown only if
+   seats and teachers work out. Only the timetable is saved and checked now. No returns to the inputs.
 5. **Write the seating plan?** Yes writes the seating plan and duties and checks the whole plan.
 
 If no plan is possible, the app shows the reason and goes back to the dates or the inputs, with every choice
@@ -95,14 +97,14 @@ python engine/check.py data/tiny output/2026-11-19_02-43-53
 Plan check: no problems. 7 papers, 7 room files, 48 seats, 14 duties checked.
 ```
 
-`--output <folder>` puts plan folders somewhere other than `output/`. Every run makes a new folder named by
-the time of the run, so nothing is overwritten:
+Each run writes a new folder, named by the time of the run, under `output/` or the folder given with
+`--output <folder>`:
 
 ```
 output/2026-11-19_02-43-53/
-├── schedule.csv          the date sheet: date, session, paper, its course codes, students
+├── schedule.csv          the date sheet: date, session, paper_id, course_codes, students (a count)
 ├── duties.csv            one row per teacher per room per session
-├── basis.txt             the two "basis" lines printed above
+├── basis.txt             the basis lines printed above
 ├── terms.md              what the words of the plan mean, with small examples
 └── daywise_seating_plans/<date>/<session>/<room>.csv
 ```
@@ -122,12 +124,12 @@ If no plan is possible, the folder holds only `why.txt`, with the reason that wa
 
 | Folder | What it is |
 |---|---|
-| `data/tiny` | The small example: 2 cohorts, 16 students, 3 rooms, 9 teachers, 2 to 6 Nov. Small enough to check by hand. |
-| `data/main` | The realistic example: 1,600 students in 10 cohorts, 56 papers, 36 rooms, 85 teachers, 2 to 20 Nov. Made up, not real data. |
+| `data/tiny` | The small example: 16 students in 2 sections, 3 rooms, 9 teachers, 2 to 6 Nov. Small enough to check by hand. |
+| `data/main` | The realistic example: 1,600 students in 32 sections of 10 cohorts (a cohort is a program and year, such as BTech CSE 2nd year), 56 papers, 36 rooms, 85 teachers, 2 to 20 Nov. Made up, not real data. |
 | `data/impossible/` | Seven copies of `tiny`, each broken on purpose so no plan is possible ([its README](data/impossible/README.md)). |
 
-`python tools/generate_data.py` writes `data/tiny` and `data/main`. Its numbers are at the top of the script,
-and the same numbers always give the same files. The input files and their columns are in
+`python tools/generate_data.py` rewrites `data/tiny` and `data/main` from the `TINY` and `MAIN` settings in the
+script; the same settings always give the same files. It does not touch `data/impossible/`. The input files and their columns are in
 [`docs/data_design_spec.md`](docs/data_design_spec.md) sections 2 and 3.
 
 ## Tests
@@ -136,11 +138,11 @@ and the same numbers always give the same files. The input files and their colum
 python -m pytest tests/unit
 ```
 
-The unit tests use scripted answers instead of a person, so no menu, picker or calendar opens. The windows
-themselves need a person to try them.
+The unit tests use scripted answers instead of a person, so no menu, picker or calendar opens. The calendars
+and pickers are not tested automatically; try them by hand.
 
-The demo cases run the planner and the checker from outside, the way a person would, and check the exit codes
-and messages. They need bash: Git Bash on Windows, the normal terminal on Linux and Mac. Run one, or all ten:
+Himank's ten demo cases from the lab evals run `engine/main.py` and `engine/check.py` as commands, the way a
+person would, and check their exit codes and messages. They need bash: Git Bash on Windows, the normal terminal on Linux and Mac. Run one, or all ten:
 
 ```
 bash tests/demo/04-gap-window.sh
@@ -167,16 +169,16 @@ python tests/demo/python_tests/run_all.py
 | `inputs.py` | The nine inputs, the inputs menu, the path checks and the file and folder pickers. |
 | `calendars.py` | The two calendars and the dates behind them. |
 | `planner.py` | Runs the engine on the chosen files and writes each run's folder. |
-| `engine/main.py` | The command line: checks the input, runs the three steps, writes the plan, prints the numbers. |
+| `engine/main.py` | The command line: checks the input, makes the date sheet, seating and duties, writes the plan, prints the numbers. |
 | `engine/loader.py` | Reads the input files. |
 | `engine/validate.py` | Checks the input: first that every file can be read, then the data inside. |
 | `engine/exam.py` | Builds what the steps need, once: papers, rooms, sections, who teaches what, exam days. |
-| `engine/schedule.py` | Step 4: a date and session for each paper. |
-| `engine/seat.py`, `engine/room_mix.py` | Step 5: a seat for each student; `room_mix.py` picks the mix of room sizes. |
-| `engine/duties.py` | Step 6: teachers for each room. |
+| `engine/schedule.py` | Makes the date sheet: a date and session for each paper. |
+| `engine/seat.py`, `engine/room_mix.py` | Gives every student a seat; `room_mix.py` picks the mix of room sizes. |
+| `engine/duties.py` | Picks the teachers for each room. |
 | `engine/writer.py` | Writes the plan folder, or `why.txt`. |
 | `engine/errors.py` | `NoPlan`, raised when no plan is possible. |
-| `engine/check.py` | The checker. It imports nothing from the planner, so a bug there can't hide from it. |
+| `engine/check.py` | The checker. It imports nothing from the planner, so a planner bug is not copied into the checker. |
 
-The planner is greedy and plain on purpose, so every step can be explained, and the same input always gives
-the same plan. What is left for later is in the model spec, section 2.
+The planner is greedy: it places one paper, seat or duty at a time by plain rules instead of searching every
+possible plan, so every step can be explained. The same input always gives the same plan. What is left for later is in the model spec, section 2.

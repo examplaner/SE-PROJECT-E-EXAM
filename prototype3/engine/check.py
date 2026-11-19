@@ -109,8 +109,8 @@ class Seat:
     student_id: str
 
 
-def row_of(seat):
-    """Sort key: front row first."""
+def front_row_first(seat):
+    """Sort key for Seats."""
     return seat.row
 
 
@@ -468,7 +468,10 @@ def read_room_file(path, where, size, problems):
     wrong_width = any(len(values) != columns for _, values in lines)
     if len(lines) != rows or wrong_width:
         widths = sorted({len(values) for _, values in lines})
-        seats = " or ".join(str(width) for width in widths) or "0"
+        if widths:
+            seats = " or ".join(str(width) for width in widths)
+        else:
+            seats = "0"
         problems.add("room shape", f"{where}: {len(lines)} rows of {seats} seats; this room "
                                    f"has {rows} rows of {columns} seats.")
         return None
@@ -496,7 +499,7 @@ def read_room_file(path, where, size, problems):
     someone_sits = False
     for grid_row in grid:
         for cell in grid_row:
-            if cell:
+            if cell is not None:
                 someone_sits = True
     if not someone_sits:
         problems.add("output files",
@@ -731,6 +734,7 @@ def check_rooms(room_files, good_seats, problems):
             for paper_id in sorted(papers_in_column[index] & papers_in_column[index + 1]):
                 side_by_side.append((index, paper_id))
 
+        broken = True
         if len(papers) > 2:
             problems.add("two papers at most", f"{where}: {len(papers)} papers "
                                                f"({', '.join(papers)}); a room holds at most two.")
@@ -742,9 +746,10 @@ def check_rooms(room_files, good_seats, problems):
             index, paper_id = side_by_side[0]
             problems.add("column rule", column_rule_text(where, index, paper_id, seats))
         else:
-            continue
-        for paper_id in papers:
-            reported.add((room_file.slot, paper_id))
+            broken = False
+        if broken:
+            for paper_id in papers:
+                reported.add((room_file.slot, paper_id))
     return reported
 
 
@@ -755,7 +760,7 @@ def column_rule_text(where, index, paper_id, seats):
              f"side by side."]
     for column in (index + 1, index + 2):
         seats_here = [seat for seat in seats if seat.column == column and seat.paper_id == paper_id]
-        seats_here.sort(key=row_of)
+        seats_here.sort(key=front_row_first)
         rows_text = ", ".join(str(seat.row) for seat in seats_here)
         students = ", ".join(seat.student_id for seat in seats_here)
         word = "row" if len(seats_here) == 1 else "rows"

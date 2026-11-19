@@ -43,7 +43,9 @@ def rules_named(printed):
     names = set()
     for line in printed.splitlines():
         if line.startswith("Rule: "):
-            names.add(line[len("Rule: "):].rsplit(" (", 1)[0])
+            rule_and_count = line[len("Rule: "):]
+            rule, _ = rule_and_count.rsplit(" (", 1)
+            names.add(rule)
     return names
 
 

@@ -2,7 +2,8 @@
 Expected: main.py writes one plan folder, and check.py finds no problem in
 56 papers, 454 room files, 8,750 seats and 908 duties."""
 
-from demo_helpers import PYTHON, REALISTIC_DATASET, expect_code, expect_text, fail, new_work_folder, run
+from demo_helpers import (PYTHON, REALISTIC_DATASET, expect_code, expect_text, fail,
+                          new_work_folder, run)
 
 work = new_work_folder()
 print("Case 01: make the full plan of the realistic dataset and check all of it.")

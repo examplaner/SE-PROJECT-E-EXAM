@@ -45,6 +45,7 @@ def room_options(students, sizes, available):
         for count, size in zip(counts, sizes):
             seats += count * size
         left = max(0, students - seats)
+        # whole rooms needed, rounded up: ceil(left / last_size)
         last = (left + last_size - 1) // last_size
         if last > available[-1]:
             continue
@@ -82,7 +83,8 @@ def best_combination(group_sizes, sizes, available):
     for students in group_sizes:
         options = room_options(students, sizes, available)
         next_best = {}
-        for used, ((rooms, empty), chosen) in best_for.items():
+        for used, (score_so_far, chosen) in best_for.items():
+            rooms, empty = score_so_far
             for option in options:
                 now_used = []
                 for already, more in zip(used, option):

@@ -15,6 +15,15 @@ from conftest import REALISTIC_DATASET, inputs_of
 CHOSEN = inputs_of(REALISTIC_DATASET)
 
 
+# stand-ins for the calendars: leave the dates as they are
+def continue_with_the_same_dates(exam_calendar, mode):
+    return ("continue", exam_calendar)
+
+
+def back_with_the_same_dates(exam_calendar, mode):
+    return ("back", exam_calendar)
+
+
 class Run:
     """A fake terminal and planner. The person picks every input on the
     first visit to the inputs menu and exits on the next."""
@@ -23,7 +32,7 @@ class Run:
         self.visits = []
         self.ui = Mock()
         self.ui.pick_inputs.side_effect = self.pick_inputs
-        self.ui.pick_dates.side_effect = lambda exam_calendar, mode: ("continue", exam_calendar)
+        self.ui.pick_dates.side_effect = continue_with_the_same_dates
         self.backend = Mock()
         self.backend.InputProblem = planner.InputProblem
         self.backend.NoPlan = planner.NoPlan
@@ -108,7 +117,7 @@ def test_another_failure_lets_the_person_change_the_inputs(run):
 
 
 def test_back_in_the_calendar_keeps_the_inputs(run):
-    run.ui.pick_dates.side_effect = lambda exam_calendar, mode: ("back", exam_calendar)
+    run.ui.pick_dates.side_effect = back_with_the_same_dates
     run.go()
     assert run.visits[1] == CHOSEN
     run.backend.generate_timetable.assert_not_called()

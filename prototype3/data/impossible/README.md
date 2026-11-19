@@ -1,4 +1,4 @@
-# Impossible datasets (step 7)
+# Impossible datasets
 
 Each folder is a copy of `data/tiny` with one thing broken on purpose, so that no plan is possible. Run one from `prototype3/`:
 
@@ -8,7 +8,9 @@ python engine/main.py data/impossible/<folder>
 
 The tool prints why, writes the same text to `why.txt` in a new folder under `output/`, writes nothing else, and exits with 2 (model spec §12).
 
-They are real folders, not built by the tests, so they are easy to use and easy to tweak (Krish, 2026-11-03). If `tiny` changes, these copies do not change with it: re-check them by hand.
+They are real folders, not built by the tests, so they are easy to use and easy to tweak (Krish, 2026-11-03). If `tiny` changes, these copies do not change with it: run each one and check it still exits with 2 and names the rule in the table.
+
+The rules are in the model spec: exam days §6, gap and paper placement §8, seats §9, duty room and duties §10.
 
 | Folder | What is broken (compared with `tiny`) | Rule in the message |
 |---|---|---|
@@ -18,15 +20,15 @@ They are real folders, not built by the tests, so they are easy to use and easy 
 | `no_day_fits` | `settings.yaml`: `invigilators_per_room: 5`. CSE2001 needs 2 rooms, so 10 teachers, and there are 9 | `paper placement` |
 | `waiting_paper` | `teaching.csv`: T005 also teaches CSE2003 to BT2ECOM_I, so T005 teaches every student of CSE2001. Every student writes CSE2001, so no other paper can share its slot and give T005 a room | `duty room` |
 | `duty_room_full` | `settings.yaml`: `invigilators_per_room: 1`; `teaching.csv`: T006 also teaches CSE2001 to BT2CSE_I. T005 and T006 both need S02, which has one place | `duty room` |
-| `too_few_teachers` | `settings.yaml`: `invigilators_per_room: 3`; `teaching.csv`: T009 (PhD) teaches all four electives. 6 Nov morning needs all 9 teachers, but T009 has own students in every room | `duties` |
+| `too_few_teachers` | `settings.yaml`: `invigilators_per_room: 3`; `teaching.csv`: T009 (PhD) teaches all four electives. 6 Nov morning needs all 9 teachers, but T009 has their own students in every room | `duties` |
 
 ## Reasons with no dataset (backup checks)
 
 These checks stay in the code to show we thought of them, even though `main.py` never reaches them on a valid input with students (Krish, 2026-11-03). Each has a test.
 
-| Check | Why it isn't reached | Test |
+| Check | Why no dataset shows it | Test |
 |---|---|---|
-| `seat.py`: rooms run out in a slot (`Rule: seats`) | Step 4 asks `seat.seat_slot()` before it books a session | `tests/unit/test_seat.py::test_a_room_never_holds_a_third_paper` |
-| `duties.py`: a teacher's one own paper has no room (`Rule: duty room`) | Step 4 checks every paper's teachers before it books a session | `tests/unit/test_duties.py::test_one_own_paper_with_no_room_is_no_plan` |
-| `duties.py`: two own papers in one slot and no one room counts for both (`Rule: duty room`) | Can happen, because step 4 checks each paper on its own. But both papers need a section the teacher doesn't teach, in different rooms, and `tiny` has too few sections for that | `tests/unit/test_duties.py::test_no_plan_when_two_own_papers_need_different_rooms` |
+| `seat.py`: rooms run out in a slot (`Rule: seats`) | The scheduler (`schedule.py`) asks `seat.seat_slot()` before it books a session | `tests/unit/test_seat.py::test_a_room_never_holds_a_third_paper` |
+| `duties.py`: a teacher's one own paper has no room (`Rule: duty room`) | The scheduler (`schedule.py`) checks every paper's teachers before it books a session | `tests/unit/test_duties.py::test_one_own_paper_with_no_room_is_no_plan` |
+| `duties.py`: two own papers in one slot and no one room counts for both (`Rule: duty room`) | Can happen, because the scheduler checks each paper on its own. But both papers need a section the teacher doesn't teach, in different rooms, and `tiny` has too few sections for that | `tests/unit/test_duties.py::test_no_plan_when_two_own_papers_need_different_rooms` |
 | `main.py`: no papers (`Rule: papers`) | Reached only when the input files hold just their headers: with no sections, students or courses every check passes, and nothing is left to schedule | `tests/unit/test_no_plan.py::test_files_with_only_headers_have_no_papers` |

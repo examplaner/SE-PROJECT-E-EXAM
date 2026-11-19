@@ -102,6 +102,11 @@ def size_then_id(paper):
     return (len(paper.students), paper.paper_id)
 
 
+def by_paper_id(paper):
+    """Sort key: the paper ID."""
+    return paper.paper_id
+
+
 def build_clashes(papers):
     """{paper_id: set of the paper_ids that share a student with it}."""
     papers_of_student = {}
@@ -137,6 +142,12 @@ def most_papers_in_window(days, gap):
 def check_before_scheduling(exam):
     """Cheap checks that show straight away that no plan can exist (model
     spec section 12). Raises NoPlan."""
+    check_gap_window(exam)
+    check_biggest_paper(exam)
+
+
+def check_gap_window(exam):
+    """No student writes more papers than the window holds with the gap."""
     papers_of = {}
     for paper in exam.papers.values():
         for student in paper.students:
@@ -159,22 +170,27 @@ def check_before_scheduling(exam):
                      f"at most {most} papers fit.\n"
                      f"Students with more papers than that: {len(too_many)}.")
 
-    # a paper alone can't use neighbouring columns, so one paper per room is
-    # the most seats it can ever get in one session
-    if exam.papers:
-        # on a tie in size, the paper with the highest ID
-        biggest = max(exam.papers.values(), key=size_then_id)
-        limit = seat_limit(exam.rooms)
-        if len(biggest.students) > limit:
-            if len(exam.rooms) == 1:
-                rooms_give = "The only room gives"
-            else:
-                rooms_give = f"All {len(exam.rooms)} rooms together give"
-            raise NoPlan("No plan possible.\n"
-                         "Rule: seats\n"
-                         f"Paper: {biggest.paper_id} ({len(biggest.students)} students)\n"
-                         f"{rooms_give} {limit} seats to one paper (every other seat "
-                         f"column), so no session can seat it.")
+
+def check_biggest_paper(exam):
+    """The biggest paper fits in one session. A paper alone can't use
+    neighbouring columns, so one paper per room is the most seats it can
+    ever get."""
+    if not exam.papers:
+        return
+    # on a tie in size, the paper with the highest ID
+    biggest = max(exam.papers.values(), key=size_then_id)
+    limit = seat_limit(exam.rooms)
+    if len(biggest.students) <= limit:
+        return
+    if len(exam.rooms) == 1:
+        rooms_give = "The only room gives"
+    else:
+        rooms_give = f"All {len(exam.rooms)} rooms together give"
+    raise NoPlan("No plan possible.\n"
+                 "Rule: seats\n"
+                 f"Paper: {biggest.paper_id} ({len(biggest.students)} students)\n"
+                 f"{rooms_give} {limit} seats to one paper (every other seat column), so no "
+                 f"session can seat it.")
 
 
 def check_session(papers, exam):
@@ -287,11 +303,8 @@ def place_papers(way, exam, clashes, checked):
 
     placements = []
     for (day, session), papers in timetable.papers_in.items():
-        paper_of_id = {}
-        for paper in papers:
-            paper_of_id[paper.paper_id] = paper
-        for paper_id in sorted(paper_of_id):
-            placements.append(Placement(day, session, paper_of_id[paper_id]))
+        for paper in sorted(papers, key=by_paper_id):
+            placements.append(Placement(day, session, paper))
     return placements
 
 

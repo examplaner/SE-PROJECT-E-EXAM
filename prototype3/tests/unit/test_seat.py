@@ -23,7 +23,11 @@ def picture(plan):
     for row in plan.grid:
         cells = []
         for cell in row:
-            cells.append(cell[1] if cell else ".")
+            if cell is None:
+                cells.append(".")
+            else:
+                paper_id, student_id = cell
+                cells.append(student_id)
         lines.append(" ".join(cells))
     return lines
 
@@ -285,8 +289,9 @@ def test_column_rule_two_papers_at_most_and_roll_order(dataset):
             for column in range(len(plan.grid[0])):
                 papers = set()
                 for row in plan.grid:
-                    if row[column]:
-                        papers.add(row[column][0])
+                    if row[column] is not None:
+                        paper_id, student_id = row[column]
+                        papers.add(paper_id)
                 assert len(papers) <= 1, (slot, plan.room_id)
                 papers_in_column.append(papers)
             for left, right in zip(papers_in_column, papers_in_column[1:]):

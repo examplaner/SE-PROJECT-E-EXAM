@@ -29,7 +29,8 @@ if len(shared_rows) != 1:
 # Its course_codes column (the 4th) lists both codes, joined with ';'.
 row = shared_rows[0]
 print(f"Shared row: {row}")
-date, session, paper_id, codes, students = row.split(",")
+# the 4th column, as cut -f4 takes it in the bash case
+codes = row.split(",")[3]
 if codes != "CSE2001;CSE2003":
     fail(f"the shared row lists {codes}, expected CSE2001;CSE2003")
 

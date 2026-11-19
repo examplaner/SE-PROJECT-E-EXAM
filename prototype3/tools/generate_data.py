@@ -211,6 +211,7 @@ def main():
         problems = check_folder(out_dir)
         if problems:
             failed = True
+            # indent every line of the report under the dataset's name
             print("  " + validate.format_report(problems).replace("\n", "\n  "))
         else:
             print("  checks passed")
@@ -228,8 +229,8 @@ def build_dataset(design, out_dir):
     # every core, plus the electives handed out
     registrations = []
     for cohort in design["cohorts"]:
-        chosen = allocate_electives(cohort["id"], students_by_cohort[cohort["id"]], cohort["electives"],
-                                    cohort["electives_per_student"], rng)
+        chosen = allocate_electives(cohort["id"], students_by_cohort[cohort["id"]],
+                                    cohort["electives"], cohort["electives_per_student"], rng)
         for student in students_by_cohort[cohort["id"]]:
             for subject in cohort["cores"] + chosen[student]:
                 registrations.append((student, codes[(cohort["id"], subject)]))
@@ -248,7 +249,8 @@ def build_dataset(design, out_dir):
     for section_id, members in students_by_section.items():
         write_csv(out_dir / "sections" / f"{section_id}.csv", loader.ROSTER_COLUMNS,
                   [[student] for student in members])
-    write_csv(out_dir / "courses.csv", loader.CSV_COLUMNS["courses"], make_course_rows(design, codes))
+    write_csv(out_dir / "courses.csv", loader.CSV_COLUMNS["courses"],
+              make_course_rows(design, codes))
     write_csv(out_dir / "registrations.csv", loader.CSV_COLUMNS["registrations"], registrations)
     write_csv(out_dir / "rooms.csv", loader.CSV_COLUMNS["rooms"], make_room_rows(design))
     write_csv(out_dir / "teachers.csv", loader.CSV_COLUMNS["teachers"], teachers)
@@ -541,7 +543,8 @@ def print_summary(design, codes, registrations, assigned, teachers):
     for teacher, subject, _ in assigned:
         teachers_per_subject.setdefault(subject, []).append(teacher)
 
-    total_students = sum(cohort["sections"] for cohort in design["cohorts"]) * design["section_size"]
+    sections = sum(cohort["sections"] for cohort in design["cohorts"])
+    total_students = sections * design["section_size"]
     print(f"  {total_students} students, {len(codes)} course codes, "
           f"{len(subjects_in_order(design))} papers, {len(teachers)} teachers")
     print(f"  {'paper':<40} {'students':>8}  teachers  codes")

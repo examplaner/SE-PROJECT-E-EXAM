@@ -127,11 +127,6 @@ def run_main(input_dir, output_dir, capsys):
 
 
 def inputs_of(folder):
-    """The nine inputs of a dataset folder, as the app's menu would pick them."""
-    selected = {}
-    for key in ["teachers", "courses", "sections", "registrations", "rooms", "teaching"]:
-        selected[key] = folder / f"{key}.csv"
-    selected["students"] = folder / "sections"
-    selected["settings"] = folder / "settings.yaml"
-    selected["constraints"] = folder / "constraints.yaml"
-    return selected
+    """The nine inputs of a dataset folder, as the app would have them
+    picked: {input key: path}."""
+    return loader.input_paths(folder)

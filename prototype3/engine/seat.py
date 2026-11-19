@@ -54,23 +54,29 @@ def seat_slot(papers, exam):
 
     plans, unseated = seat_with_mixing(papers, exam.rooms)
     if unseated:
-        total = 0
-        for paper in papers:
-            total += len(paper.students)
-        missing = 0
-        names = []
-        for paper_id, students in sorted(unseated.items()):
-            missing += len(students)
-            names.append(f"{paper_id} ({len(students)})")
-        if len(exam.rooms) == 1:
-            rooms_used = "The only room is in use, with two papers in it"
-        else:
-            rooms_used = f"All {len(exam.rooms)} rooms are in use, with two papers in a room"
-        raise NoPlan("No plan possible.\n"
-                     "Rule: seats\n"
-                     f"{rooms_used} where needed, but {missing} of {total} students still "
-                     f"have no seat: {', '.join(names)}.")
+        raise no_seat_error(unseated, papers, exam)
     return plans
+
+
+def no_seat_error(unseated, papers, exam):
+    """The NoPlan when some students have no seat even with mixing.
+    unseated: {paper_id: students still without a seat}."""
+    total = 0
+    for paper in papers:
+        total += len(paper.students)
+    missing = 0
+    names = []
+    for paper_id, students in sorted(unseated.items()):
+        missing += len(students)
+        names.append(f"{paper_id} ({len(students)})")
+    if len(exam.rooms) == 1:
+        rooms_used = "The only room is in use, with two papers in it"
+    else:
+        rooms_used = f"All {len(exam.rooms)} rooms are in use, with two papers in a room"
+    return NoPlan("No plan possible.\n"
+                  "Rule: seats\n"
+                  f"{rooms_used} where needed, but {missing} of {total} students still "
+                  f"have no seat: {', '.join(names)}.")
 
 
 def make_seating(placements, exam):
@@ -238,10 +244,11 @@ def seat_best(papers, exam, must_split):
     plans = []
     for (paper_id, students), rooms in zip(groups, rooms_of_group):
         # each room starts where the last one stopped
+        waiting = students
         for room in rooms:
-            plan, left = seat_room(room, [(paper_id, students)])
+            plan, left = seat_room(room, [(paper_id, waiting)])
             plans.append(plan)
-            students = left[0]
+            waiting = left[0]
     return in_rooms_csv_order(plans, exam.rooms)
 
 
@@ -341,12 +348,13 @@ def seat_with_mixing(papers, rooms):
 
     # each paper first fills, alone, the rooms it fills completely
     for paper_id, students in paper_queues(papers):
-        while room_index < len(rooms) and len(students) >= rooms[room_index].alone_seats():
-            plan, left = seat_room(rooms[room_index], [(paper_id, students)])
+        unseated_here = students
+        while room_index < len(rooms) and len(unseated_here) >= rooms[room_index].alone_seats():
+            plan, left = seat_room(rooms[room_index], [(paper_id, unseated_here)])
             plans.append(plan)
-            students = left[0]
+            unseated_here = left[0]
             room_index += 1
-        waiting[paper_id] = students
+        waiting[paper_id] = unseated_here
 
     # the leftovers go into the rooms still free, biggest in the odd columns;
     # a second one joins in the even columns only if otherwise the leftovers
@@ -414,10 +422,10 @@ def join_leftovers(plans, papers, exam):
         if choice is None:
             return plans
         first_id, second_id, shared = choice
+        groups = [(first_id, students_of(leftovers[first_id], first_id)),
+                  (second_id, students_of(leftovers[second_id], second_id))]
         # best_join() only picks a room both leftovers fit in, so nobody is left
-        joined, _ = seat_room(room_of[shared.room_id], [
-            (first_id, students_of(leftovers[first_id], first_id)),
-            (second_id, students_of(leftovers[second_id], second_id))])
+        joined, _ = seat_room(room_of[shared.room_id], groups)
         trial = []
         for plan in plans:
             if plan is not leftovers[first_id] and plan is not leftovers[second_id]:
@@ -475,6 +483,7 @@ def best_join(plans, leftovers, room_of, position, refused):
 
     def bigger_first(paper_id):
         return (-size[paper_id], paper_id)
+
     order = sorted(leftovers, key=bigger_first)
 
     best_rank = None

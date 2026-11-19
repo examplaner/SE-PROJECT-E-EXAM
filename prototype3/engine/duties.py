@@ -146,7 +146,8 @@ def staff_slot(day, session, plans, exam, regulars, phds, counts, days_worked):
 
     # 2. every other place: regular teachers best first, PhD scholars last
     others = [teacher_id for teacher_id in regulars if teacher_id not in own_paper]
-    order = best_first(others, day, counts, days_worked) + best_first(phds, day, counts, days_worked)
+    order = (best_first(others, day, counts, days_worked)
+             + best_first(phds, day, counts, days_worked))
     for teacher_id in order:
         if all_full(teachers_in, exam.per_room):
             break
@@ -213,17 +214,22 @@ def own_paper_rooms(teacher_id, teaches, plans, contents, day, session):
     for paper_id in own_papers:
         rooms &= set(rooms_for_paper(paper_id, teaches, plans, contents))
     if not rooms:
-        # step 4 checks each paper's teachers before booking, so with one own
-        # paper this is a backup; with two own papers it can really happen
-        if len(own_papers) == 1:
-            text = (f"{teacher_id} needs a duty for {own_papers[0]}, but every room in "
-                    f"this slot has their own students.")
-        else:
-            text = (f"{teacher_id} teaches {', '.join(own_papers)}, all written in this "
-                    f"slot, and no one room counts as a duty for all of them (a teacher "
-                    f"has at most one duty per slot).")
-        raise no_plan("duty room", day, session, text)
+        raise own_paper_error(teacher_id, own_papers, day, session)
     return rooms
+
+
+def own_paper_error(teacher_id, own_papers, day, session):
+    """The NoPlan when no room counts as the teacher's own-paper duty. The
+    scheduler checks each paper's teachers before booking, so with one own
+    paper this is a backup; with two own papers it can really happen."""
+    if len(own_papers) == 1:
+        text = (f"{teacher_id} needs a duty for {own_papers[0]}, but every room in "
+                f"this slot has their own students.")
+    else:
+        text = (f"{teacher_id} teaches {', '.join(own_papers)}, all written in this "
+                f"slot, and no one room counts as a duty for all of them (a teacher "
+                f"has at most one duty per slot).")
+    return no_plan("duty room", day, session, text)
 
 
 def place_teacher(teacher_id, teachers_in, per_room, may_sit, rooms_tried):
@@ -245,6 +251,8 @@ def place_teacher(teacher_id, teachers_in, per_room, may_sit, rooms_tried):
         if room_id in rooms_tried:
             continue
         rooms_tried.add(room_id)
+        # a copy, because the loop takes teachers out of this list and puts
+        # them back
         for other in list(teachers_in[room_id]):
             teachers_in[room_id].remove(other)
             teachers_in[room_id].append(teacher_id)

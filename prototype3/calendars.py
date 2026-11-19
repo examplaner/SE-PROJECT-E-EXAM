@@ -133,8 +133,8 @@ class CalendarDialog:
         ttk.Button(navigation, text="Show", command=self.redraw).pack(side="left", padx=8)
         ttk.Button(navigation, text=">", width=4, command=self.next_month).pack(side="right")
 
-        self.grid = ttk.Frame(frame)
-        self.grid.pack()
+        self.days_frame = ttk.Frame(frame)
+        self.days_frame.pack()
         ttk.Label(frame, textvariable=self.status, wraplength=480).pack(fill="x", pady=12)
         actions = ttk.Frame(frame)
         actions.pack(fill="x")
@@ -181,12 +181,13 @@ class CalendarDialog:
         if shown is None:
             return
         year, month = shown
-        for widget in self.grid.winfo_children():
+        for widget in self.days_frame.winfo_children():
             widget.destroy()
         self.description.set(f"{calendar.month_name[month]} {year}\n"
                              f"Range: {self.state.start} to {self.state.end}")
         for column, name in enumerate(WEEKDAYS):
-            ttk.Label(self.grid, text=name, anchor="center", width=8).grid(row=0, column=column)
+            label = ttk.Label(self.days_frame, text=name, anchor="center", width=8)
+            label.grid(row=0, column=column)
         for row, week in enumerate(calendar.monthcalendar(year, month), start=1):
             for column, number in enumerate(week):
                 # 0 is a day of the next or previous month
@@ -204,7 +205,7 @@ class CalendarDialog:
         """One day of the month: a label that reacts to a click. Not a button,
         because macOS draws buttons itself and ignores their colour."""
         inside = self.state.start <= day <= self.state.end
-        cell = tkinter.Label(self.grid, text=str(day.day), width=7, height=2,
+        cell = tkinter.Label(self.days_frame, text=str(day.day), width=7, height=2,
                              relief="raised", borderwidth=1)
         if self.mode == "exclusions" and not inside:
             # outside the range: shown grey, and a click does nothing

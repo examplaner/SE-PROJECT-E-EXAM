@@ -436,7 +436,8 @@ def check_constraints(constraints, courses, problems):
             if code not in group_of:
                 group_of[code] = number
             elif group_of[code] == number:
-                report("code is in at most one group", f"{label}: {code} is again in the same group")
+                report("code is in at most one group",
+                       f"{label}: {code} is again in the same group")
             else:
                 report("code is in at most one group",
                        f"{label}: {code} is also in same_paper group {group_of[code]}")
