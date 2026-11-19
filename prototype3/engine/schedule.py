@@ -155,11 +155,15 @@ def check_before_scheduling(exam):
         biggest = max(exam.papers.values(), key=lambda paper: (len(paper.students), paper.paper_id))
         limit = seat_limit(exam.rooms)
         if len(biggest.students) > limit:
+            if len(exam.rooms) == 1:
+                rooms_give = "The only room gives"
+            else:
+                rooms_give = f"All {len(exam.rooms)} rooms together give"
             raise NoPlan("No plan possible.\n"
                          "Rule: seats\n"
                          f"Paper: {biggest.paper_id} ({len(biggest.students)} students)\n"
-                         f"All {len(exam.rooms)} rooms together give {limit} seats to one "
-                         f"paper (every other seat column), so no session can seat it.")
+                         f"{rooms_give} {limit} seats to one paper (every other seat "
+                         f"column), so no session can seat it.")
 
 
 def check_session(papers, exam):

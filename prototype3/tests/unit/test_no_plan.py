@@ -10,7 +10,7 @@ from conftest import IMPOSSIBLE_DATASETS, SMALL_DATASET, run_main
 EXPECTED = {
     "no_exam_days": ("exam days", "settings.yaml gives no exam day"),
     "window_too_short": ("gap", "at most 2 papers fit"),
-    "paper_too_big": ("seats", "All 1 rooms together give 12 seats to one paper"),
+    "paper_too_big": ("seats", "The only room gives 12 seats to one paper"),
     "no_day_fits": ("paper placement",
                     "  - teachers: 10 sessions would need more teachers than the 9 there are "
                     "(5 per room)"),
@@ -38,6 +38,22 @@ def test_impossible_dataset_says_why(dataset, tmp_path, capsys):
     assert why.splitlines()[:2] == ["No plan possible.", f"Rule: {rule}"]
     assert line in why
     assert why in printed
+
+
+def test_files_with_only_headers_have_no_papers(small_copy, tmp_path, capsys):
+    # with no sections, students or courses every check passes, and
+    # there is nothing to schedule
+    for name in ["sections.csv", "courses.csv", "registrations.csv", "teaching.csv"]:
+        path = small_copy / name
+        header = path.read_text(encoding="utf-8").splitlines()[0]
+        path.write_text(header + "\n", encoding="utf-8")
+    for roster in (small_copy / "sections").iterdir():
+        roster.unlink()
+    (small_copy / "constraints.yaml").write_text("", encoding="utf-8")
+    code, printed, folder = run_main(small_copy, tmp_path / "out", capsys)
+    assert code == 2, printed
+    assert "Rule: papers" in printed
+    assert [path.name for path in folder.iterdir()] == ["why.txt"]
 
 
 def test_a_valid_input_writes_no_why_txt(tmp_path, capsys):

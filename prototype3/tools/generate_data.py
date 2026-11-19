@@ -505,15 +505,17 @@ def same_paper_groups(design, codes):
     return groups
 
 
+# every file ends its lines with \n on every system, as git stores them, so
+# running the generator again leaves git with nothing to show
 def write_csv(path, header, rows):
     with open(path, "w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
+        writer = csv.writer(file, lineterminator="\n")
         writer.writerow(header)
         writer.writerows(rows)
 
 
 def write_yaml(path, content):
-    with open(path, "w", encoding="utf-8") as file:
+    with open(path, "w", newline="\n", encoding="utf-8") as file:
         yaml.safe_dump(content, file, sort_keys=False, default_flow_style=None)
 
 

@@ -105,6 +105,7 @@ invigilators_per_room: 2
 - **Decided:** exactly two sessions.
 - **Decided:** the gap is counted in calendar days with `min_gap_days: 2`, and weekends and holidays count.
 - **Default:** key names, the date window, and how weekdays and holidays are given.
+- **Default:** any other key is an input problem (exit 1), so a misspelt key is caught instead of ignored.
 - General parameters such as "number of days" belong here. Rules about specific papers go in `constraints.yaml`.
 
 ## 7. `constraints.yaml`
@@ -116,6 +117,7 @@ same_paper:              # Decided. Codes that are one question paper.
 
 - **Decided:** `same_paper` lists course codes that are one paper. The codes in a group are scheduled in one slot and treated as one paper for seating and duties. They are entered by hand.
 - **Default:** a group's paper ID is its first code. A code not in any group is its own paper.
+- **Default:** any other key is an input problem (exit 1). A misspelt `same_papers` would otherwise be ignored, and the codes of one question paper planned as separate papers.
 - **Default:** clashes that come from registrations are never written here, because the tool works them out itself.
 - **Open:** separation rules. Ishan's original examples were `[OS, AI, DBMS]` and `[Differential Equations, Calculus 3]`. A bare list can mean several things, so each kind needs its own name and a real use case in the dataset before it is built. Proposed kinds:
 
@@ -305,3 +307,4 @@ Steps are best done one at a time, at your own pace. Before a step, the AI lists
 | 2026-11-10 | §11: the plan folder also holds `basis.txt`, two lines saying on what basis the timetable and the seating were made; the same lines are printed (was Decided: the three plan parts and nothing else) | Problem: after the 2026-11-10 changes a plan can come from one of three ways of choosing sessions, and on `main` the first way fails, so nobody reading the plan could tell which rule made it. Krish: the tool should state the reason, on what basis we made the timetable and the seating plan; both on the screen and in the folder; one line each is enough, because we will explain it to people before. Cost: one more file in the plan folder; `check.py` allows it and does not check it. | Pending (Ishan, via PR) |
 | 2026-11-10 | §11: the plan folder also holds `terms.md` (a copy of `docs/terms.md`, what the words of the plan mean), and the basis lines end with a pointer to it | Problem: the basis lines use words like "fewest rooms", "the session with fewer students" and "leftovers joined" that a reader may not know. Krish: create a document of what these terms mean, and add to the output that if you don't know the meaning, refer to this document. Copied into every plan folder so whoever gets the folder has it. Cost: one more file in the plan folder; `check.py` allows it and does not check it. | Pending (Ishan, via PR) |
 | 2026-11-19 | §4, §11, §13: prototype1 and prototype2 bundled into `prototype3/`, and questionary allowed for the app's menus (approved in Ishan's refactor brief). The planner and checker are in `engine/` (`python engine/main.py <input_dir>`, run from `prototype3/`), `terms.md` is `engine/terms.md`, and the app sits beside them (was: run `main.py` from `prototype1/`) | prototype2 held an exact copy of prototype1's planner and checker, so every engine change had to be made twice. One prototype with one copy loses nothing; the pre-refactor prototype1 and prototype2 are in `archive/`. | Pending Ishan review |
+| 2026-11-19 | §6, §7: a key that `settings.yaml` or `constraints.yaml` doesn't have is an input problem (was: ignored without a word) | Found while checking the refactor: `same_papers:` instead of `same_paper:` in `tiny` gave a plan with CSE2001 and CSE2003 as two papers (two date-sheet rows, seated apart), though they are one question paper; nothing kept them in one slot. | Pending Ishan review |

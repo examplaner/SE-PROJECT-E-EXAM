@@ -22,11 +22,11 @@ They are real folders, not built by the tests, so they are easy to use and easy 
 
 ## Reasons with no dataset (backup checks)
 
-These checks stay in the code to show we thought of them, even though `main.py` never reaches them on a valid input (Krish, 2026-11-03). Each is tested by calling its function directly.
+These checks stay in the code to show we thought of them, even though `main.py` never reaches them on a valid input with students (Krish, 2026-11-03). Each has a test.
 
 | Check | Why it isn't reached | Test |
 |---|---|---|
-| `seat.py`: rooms run out in a slot (`Rule: seats`) | Step 4 asks `seat.seat_slot()` before it books a session | `tests/test_seat.py::test_a_room_never_holds_a_third_paper` |
-| `duties.py`: a teacher's one own paper has no room (`Rule: duty room`) | Step 4 checks every paper's teachers before it books a session | `tests/test_no_plan.py::test_backup_one_own_paper_with_no_room` |
-| `duties.py`: two own papers in one slot and no one room counts for both (`Rule: duty room`) | Can happen, because step 4 checks each paper on its own. But both papers need a section the teacher doesn't teach, in different rooms, and `tiny` has too few sections for that | `tests/test_duties.py::test_no_plan_when_two_own_papers_need_different_rooms` |
-| `main.py`: no papers (`Rule: papers`) | Validation already stops an empty `courses.csv` (every student needs a registration) | none: validation tests cover it |
+| `seat.py`: rooms run out in a slot (`Rule: seats`) | Step 4 asks `seat.seat_slot()` before it books a session | `tests/unit/test_seat.py::test_a_room_never_holds_a_third_paper` |
+| `duties.py`: a teacher's one own paper has no room (`Rule: duty room`) | Step 4 checks every paper's teachers before it books a session | `tests/unit/test_duties.py::test_one_own_paper_with_no_room_is_no_plan` |
+| `duties.py`: two own papers in one slot and no one room counts for both (`Rule: duty room`) | Can happen, because step 4 checks each paper on its own. But both papers need a section the teacher doesn't teach, in different rooms, and `tiny` has too few sections for that | `tests/unit/test_duties.py::test_no_plan_when_two_own_papers_need_different_rooms` |
+| `main.py`: no papers (`Rule: papers`) | Reached only when the input files hold just their headers: with no sections, students or courses every check passes, and nothing is left to schedule | `tests/unit/test_no_plan.py::test_files_with_only_headers_have_no_papers` |

@@ -22,6 +22,7 @@ TEACHER_RANKS = ["PROF", "ASSOC", "ASST", "PHD"]
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 SETTING_KEYS = ["start_date", "end_date", "exam_weekdays", "holidays",
                 "sessions", "min_gap_days", "invigilators_per_room"]
+CONSTRAINT_KEYS = ["same_paper"]
 
 
 @dataclass
@@ -332,6 +333,11 @@ def check_settings(settings, problems):
     for key in SETTING_KEYS:
         if key not in settings:
             report("setting is present", f"{key} is missing")
+    # a misspelt key would otherwise be ignored without a word
+    for key in settings:
+        if key not in SETTING_KEYS:
+            report("key is known",
+                   f"{key} is not a setting; the settings are {', '.join(SETTING_KEYS)}")
 
     dates = {}
     for key in ["start_date", "end_date"]:
@@ -382,6 +388,14 @@ def check_settings(settings, problems):
 def check_constraints(constraints, courses, problems):
     def report(rule, message):
         problems.append(Problem("constraints.yaml", None, rule, message))
+
+    # a misspelt key such as same_papers would otherwise be ignored, and the
+    # codes of one question paper planned as separate papers
+    for key in constraints:
+        if key not in CONSTRAINT_KEYS:
+            report("key is known",
+                   f"{key} is not a key of constraints.yaml; the keys are "
+                   f"{', '.join(CONSTRAINT_KEYS)}")
 
     groups = constraints.get("same_paper")
     if groups is None:

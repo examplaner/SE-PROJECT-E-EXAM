@@ -132,6 +132,21 @@ def test_true_is_not_a_number_of_days(small_copy, tmp_path, capsys):
     assert "min_gap_days should be a whole number of at least 1, found True" in printed
 
 
+def test_an_unknown_setting_is_reported(small_copy, tmp_path, capsys):
+    replace_once(small_copy / "settings.yaml", "min_gap_days: 2", "min_gap_day: 2")
+    code, printed, _ = run_main(small_copy, tmp_path / "out", capsys)
+    assert code == 1
+    assert "min_gap_day is not a setting; the settings are start_date," in printed
+    assert "min_gap_days is missing" in printed
+
+
+def test_a_misspelt_same_paper_is_reported_not_ignored(small_copy, tmp_path, capsys):
+    replace_once(small_copy / "constraints.yaml", "same_paper:", "same_papers:")
+    code, printed, _ = run_main(small_copy, tmp_path / "out", capsys)
+    assert code == 1
+    assert "same_papers is not a key of constraints.yaml; the keys are same_paper" in printed
+
+
 def test_bad_constraints(small_copy, tmp_path, capsys):
     (small_copy / "constraints.yaml").write_text(
         "same_paper:\n- [CSE2001, CSE2003]\n- [CSE2003, CSE9999]\n- [PHY2001]\n",

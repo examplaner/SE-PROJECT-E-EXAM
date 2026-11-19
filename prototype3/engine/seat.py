@@ -62,11 +62,14 @@ def seat_slot(papers, exam):
         for paper_id, students in sorted(unseated.items()):
             missing += len(students)
             names.append(f"{paper_id} ({len(students)})")
+        if len(exam.rooms) == 1:
+            rooms_used = "The only room is in use, with two papers in it"
+        else:
+            rooms_used = f"All {len(exam.rooms)} rooms are in use, with two papers in a room"
         raise NoPlan("No plan possible.\n"
                      "Rule: seats\n"
-                     f"All {len(exam.rooms)} rooms are in use, with two papers in a room "
-                     f"where needed, but {missing} of {total} students still have no "
-                     f"seat: {', '.join(names)}.")
+                     f"{rooms_used} where needed, but {missing} of {total} students still "
+                     f"have no seat: {', '.join(names)}.")
     return plans
 
 
