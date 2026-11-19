@@ -235,46 +235,15 @@ def check_teachers(data, problems):
 def check_registrations(data, sections, section_of, first_seen, courses, problems):
     """Returns the (section_id, course_code) pairs with at least one student,
     for the teaching.csv check."""
-    seen_pairs = {}
+    registered = check_registration_rows(data["registrations"], sections, section_of, courses,
+                                         problems)
     students_with_registration = set()
     codes_with_registration = set()
     section_codes = set()
-
-    for row in data["registrations"]:
-        student_id = row["student_id"]
-        code = row["course_code"]
-        if student_id not in section_of:
-            problems.append(Problem("registrations.csv", row["_row"], "student exists",
-                                    f"student {student_id or '(blank)'} is not in any "
-                                    f"section file"))
-        if code not in courses:
-            problems.append(Problem("registrations.csv", row["_row"], "course code exists",
-                                    f"course code {code or '(blank)'} is not in courses.csv"))
-        if student_id not in section_of or code not in courses:
-            continue
-
-        if (student_id, code) in seen_pairs:
-            problems.append(Problem("registrations.csv", row["_row"],
-                                    "no duplicate registrations",
-                                    f"{student_id} {code} is already in row "
-                                    f"{seen_pairs[(student_id, code)]}"))
-            continue
-        seen_pairs[(student_id, code)] = row["_row"]
-
-        section_id = section_of[student_id]
-        # a roster file missing from sections.csv is reported above
-        if section_id in sections:
-            student_cohort = sections[section_id]["cohort_id"]
-            course_cohort = courses[code]["cohort_id"]
-            if student_cohort != course_cohort:
-                problems.append(Problem("registrations.csv", row["_row"],
-                                        "student registers only for own cohort's codes",
-                                        f"{student_id} is in cohort {student_cohort}, but "
-                                        f"{code} is offered to {course_cohort}"))
-
+    for student_id, code in registered:
         students_with_registration.add(student_id)
         codes_with_registration.add(code)
-        section_codes.add((section_id, code))
+        section_codes.add((section_of[student_id], code))
 
     for student_id in section_of:
         if student_id not in students_with_registration:
@@ -287,6 +256,52 @@ def check_registrations(data, sections, section_of, first_seen, courses, problem
                                     "course code has a registration",
                                     f"nobody is registered for {code}, so it has no exam"))
     return section_codes
+
+
+def check_registration_rows(rows, sections, section_of, courses, problems):
+    """Each row of registrations.csv on its own. Returns the (student_id,
+    course_code) pairs of the rows whose student and code exist, each pair
+    once."""
+    row_of_pair = {}
+    for row in rows:
+        student_id = row["student_id"]
+        code = row["course_code"]
+        if student_id not in section_of:
+            problems.append(Problem("registrations.csv", row["_row"], "student exists",
+                                    f"student {student_id or '(blank)'} is not in any "
+                                    f"section file"))
+        if code not in courses:
+            problems.append(Problem("registrations.csv", row["_row"], "course code exists",
+                                    f"course code {code or '(blank)'} is not in courses.csv"))
+        if student_id not in section_of or code not in courses:
+            continue
+
+        if (student_id, code) in row_of_pair:
+            problems.append(Problem("registrations.csv", row["_row"],
+                                    "no duplicate registrations",
+                                    f"{student_id} {code} is already in row "
+                                    f"{row_of_pair[(student_id, code)]}"))
+            continue
+        row_of_pair[(student_id, code)] = row["_row"]
+        check_own_cohort(row, sections, section_of, courses, problems)
+    return list(row_of_pair)
+
+
+def check_own_cohort(row, sections, section_of, courses, problems):
+    """A student registers only for codes offered to their own cohort."""
+    student_id = row["student_id"]
+    code = row["course_code"]
+    section_id = section_of[student_id]
+    # a roster file missing from sections.csv is reported already
+    if section_id not in sections:
+        return
+    student_cohort = sections[section_id]["cohort_id"]
+    course_cohort = courses[code]["cohort_id"]
+    if student_cohort != course_cohort:
+        problems.append(Problem("registrations.csv", row["_row"],
+                                "student registers only for own cohort's codes",
+                                f"{student_id} is in cohort {student_cohort}, but "
+                                f"{code} is offered to {course_cohort}"))
 
 
 def check_teaching(data, teachers, courses, sections, section_codes, problems):

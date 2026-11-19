@@ -258,8 +258,24 @@ def load_input(paths):
     CannotCheck if a file can't be read."""
     settings = read_input_yaml(paths["settings"])
     constraints = read_input_yaml(paths["constraints"])
+    data = settings_values(settings, paths["settings"])
+    paper_of_code = paper_groups(constraints)
+    codes_of_paper, students_of_paper = read_papers(paths["courses"], paths["registrations"],
+                                                    paper_of_code)
+    data["codes_of_paper"] = codes_of_paper
+    data["students_of_paper"] = students_of_paper
+    data["section_of"] = read_sections(paths["students"])
+    data["rooms"], data["room_order"] = read_rooms(paths["rooms"])
+    data["rank_of"] = read_ranks(paths["teachers"])
+    data["teaches"] = read_teaching(paths["teaching"], paper_of_code)
+    return data
+
+
+def settings_values(settings, path):
+    """The settings the checks use. Raises CannotCheck if one is missing or
+    wrong."""
     try:
-        data = {
+        return {
             "start": to_date(settings["start_date"]),
             "end": to_date(settings["end_date"]),
             "weekdays": {str(day) for day in settings["exam_weekdays"]},
@@ -269,22 +285,30 @@ def load_input(paths):
             "per_room": int(settings["invigilators_per_room"]),
         }
     except (KeyError, TypeError, ValueError) as error:
-        raise CannotCheck(f"{paths['settings']} has a missing or wrong value ({error}).")
+        raise CannotCheck(f"{path} has a missing or wrong value ({error}).")
 
-    # codes in one same_paper group are one paper, named by the first code
+
+def paper_groups(constraints):
+    """{course_code: paper_id} for the codes in a same_paper group: codes in
+    one group are one paper, named by the first code."""
     paper_of_code = {}
     for group in constraints.get("same_paper") or []:
         codes = [str(code) for code in group]
         for code in codes:
             paper_of_code[code] = codes[0]
+    return paper_of_code
+
+
+def read_papers(courses_path, registrations_path, paper_of_code):
+    """Returns ({paper_id: its course codes}, {paper_id: its students})."""
     codes_of_paper = {}
-    for course in read_input_table(paths["courses"], ["course_code"]):
+    for course in read_input_table(courses_path, ["course_code"]):
         code = course["course_code"]
         paper_id = paper_of_code.get(code, code)
         codes_of_paper.setdefault(paper_id, []).append(code)
 
     students_of_paper = {paper_id: set() for paper_id in codes_of_paper}
-    for row in read_input_table(paths["registrations"], ["student_id", "course_code"]):
+    for row in read_input_table(registrations_path, ["student_id", "course_code"]):
         code = row["course_code"]
         paper_id = paper_of_code.get(code, code)
         students_of_paper.setdefault(paper_id, set()).add(row["student_id"])
@@ -292,37 +316,48 @@ def load_input(paths):
         # so its seats are checked too
         if paper_id not in codes_of_paper:
             codes_of_paper[paper_id] = [code]
+    return codes_of_paper, students_of_paper
 
+
+def read_sections(students_folder):
+    """{student_id: section_id}, from the roster files."""
     section_of = {}
-    for path in sorted(Path(paths["students"]).glob("*.csv")):
+    for path in sorted(Path(students_folder).glob("*.csv")):
         for row in read_input_table(path, ["student_id"]):
             section_of[row["student_id"]] = path.stem
+    return section_of
 
-    # room_id -> (rows, seat_columns), and the room IDs in rooms.csv order
+
+def read_rooms(path):
+    """Returns ({room_id: (rows, seat_columns)}, the room IDs in rooms.csv
+    order)."""
     rooms = {}
     room_order = []
-    for row in read_input_table(paths["rooms"], ["room_id", "rows", "seat_columns"]):
+    for row in read_input_table(path, ["room_id", "rows", "seat_columns"]):
         try:
             rooms[row["room_id"]] = (int(row["rows"]), int(row["seat_columns"]))
         except ValueError:
-            raise CannotCheck(f"{paths['rooms']}: room {row['room_id']} has a size that "
+            raise CannotCheck(f"{path}: room {row['room_id']} has a size that "
                               f"is not a number.")
         room_order.append(row["room_id"])
+    return rooms, room_order
 
+
+def read_ranks(path):
+    """{teacher_id: rank}."""
     rank_of = {}
-    for row in read_input_table(paths["teachers"], ["teacher_id", "rank"]):
+    for row in read_input_table(path, ["teacher_id", "rank"]):
         rank_of[row["teacher_id"]] = row["rank"]
+    return rank_of
 
-    # teacher_id -> {(paper_id, section_id)}
+
+def read_teaching(path, paper_of_code):
+    """{teacher_id: set of (paper_id, section_id)}."""
     teaches = {}
-    for row in read_input_table(paths["teaching"], ["teacher_id", "course_code", "section_id"]):
+    for row in read_input_table(path, ["teacher_id", "course_code", "section_id"]):
         paper_id = paper_of_code.get(row["course_code"], row["course_code"])
         teaches.setdefault(row["teacher_id"], set()).add((paper_id, row["section_id"]))
-
-    data.update(codes_of_paper=codes_of_paper, students_of_paper=students_of_paper,
-                section_of=section_of, rooms=rooms, room_order=room_order,
-                rank_of=rank_of, teaches=teaches)
-    return data
+    return teaches
 
 
 # stage 1: the plan's files
@@ -553,38 +588,55 @@ def check_seats_alone(room_files, data, slot_of, row_of, skipped, problems):
     wrong_student = set()
     # (paper_id, slot) -> [Seat, ...] of a paper seated outside its slot
     wrong_slot = {}
+    for seat in seats_of(room_files):
+        paper_id = seat.paper_id
+        student_id = seat.student_id
+        # a paper whose date sheet row is wrong is reported there
+        if paper_id in skipped:
+            bad_students.add(student_id)
+        elif paper_id not in data["students_of_paper"]:
+            problems.add("registration", f"{seat.where}: {paper_id} is not a paper in the input.")
+            bad_students.add(student_id)
+        elif student_id not in data["section_of"]:
+            problems.add("registration",
+                         f"{seat.where}: {student_id} is not a student in the input.")
+            wrong_student.add((paper_id, seat.slot))
+            bad_students.add(student_id)
+        elif student_id not in data["students_of_paper"][paper_id]:
+            problems.add("registration", f"{seat.where}: {student_id} sits for {paper_id}, "
+                                         f"but is not registered for it.")
+            wrong_student.add((paper_id, seat.slot))
+            bad_students.add(student_id)
+        elif seat.slot != slot_of[paper_id]:
+            wrong_slot.setdefault((paper_id, seat.slot), []).append(seat)
+            bad_students.add(student_id)
+        else:
+            good_seats.append(seat)
+
+    report_wrong_slots(wrong_slot, slot_of, row_of, problems)
+    wrong_slot_papers = {paper_id for paper_id, _ in wrong_slot}
+    return good_seats, bad_students, wrong_slot_papers, wrong_student
+
+
+def seats_of(room_files):
+    """A Seat for every filled seat of the room files, room by room, front
+    row first."""
+    seats = []
     for room_file in room_files:
         for row_number, grid_row in enumerate(room_file.grid, start=1):
             for column_number, cell in enumerate(grid_row, start=1):
                 if cell is None:
                     continue
                 paper_id, student_id = cell
-                seat = Seat(f"{room_file.where} row {row_number}, column {column_number}",
-                            room_file.slot, room_file.room_id, row_number, column_number,
-                            paper_id, student_id)
-                # a paper whose date sheet row is wrong is reported there
-                if paper_id in skipped:
-                    bad_students.add(student_id)
-                elif paper_id not in data["students_of_paper"]:
-                    problems.add("registration",
-                                 f"{seat.where}: {paper_id} is not a paper in the input.")
-                    bad_students.add(student_id)
-                elif student_id not in data["section_of"]:
-                    problems.add("registration",
-                                 f"{seat.where}: {student_id} is not a student in the input.")
-                    wrong_student.add((paper_id, seat.slot))
-                    bad_students.add(student_id)
-                elif student_id not in data["students_of_paper"][paper_id]:
-                    problems.add("registration", f"{seat.where}: {student_id} sits for "
-                                                 f"{paper_id}, but is not registered for it.")
-                    wrong_student.add((paper_id, seat.slot))
-                    bad_students.add(student_id)
-                elif seat.slot != slot_of[paper_id]:
-                    wrong_slot.setdefault((paper_id, seat.slot), []).append(seat)
-                    bad_students.add(student_id)
-                else:
-                    good_seats.append(seat)
+                seats.append(Seat(f"{room_file.where} row {row_number}, column {column_number}",
+                                  room_file.slot, room_file.room_id, row_number, column_number,
+                                  paper_id, student_id))
+    return seats
 
+
+def report_wrong_slots(wrong_slot, slot_of, row_of, problems):
+    """One problem per paper and slot where a paper sits outside its own slot.
+    wrong_slot: {(paper_id, slot): [Seat, ...]}."""
     for (paper_id, slot), seats in sorted(wrong_slot.items()):
         planned = (f"schedule.csv row {row_of[paper_id]['_row']} has it on "
                    f"{slot_text(slot_of[paper_id])}")
@@ -595,8 +647,6 @@ def check_seats_alone(room_files, data, slot_of, row_of, skipped, problems):
             rooms = ", ".join(sorted({seat.room_id for seat in seats}))
             problems.add("paper in its slot", f"{paper_id} has {len(seats)} seats on "
                                               f"{slot_text(slot)} ({rooms}), but {planned}.")
-    wrong_slot_papers = {paper_id for paper_id, _ in wrong_slot}
-    return good_seats, bad_students, wrong_slot_papers, wrong_student
 
 
 def check_duty_rows_alone(duty_rows, data, room_files, problems):
@@ -878,32 +928,44 @@ def check_own_paper_duty(rows_of_teacher, contents, room_files, good_seats, data
             slot = slot_of[paper_id]
             if (slot, teacher_id) in reported:
                 continue
-            with_paper = []
-            without_paper = []
-            for room_id in rooms_in_slot.get(slot, []):
-                if contents.get((slot, room_id), set()) & teaches:
-                    continue
-                if paper_id in papers_in_room.get((slot, room_id), set()):
-                    with_paper.append(room_id)
-                else:
-                    without_paper.append(room_id)
-            allowed = with_paper or without_paper
+            allowed = own_paper_rooms(paper_id, teaches, slot, rooms_in_slot, contents,
+                                      papers_in_room)
             duty_rooms = {row["room_id"] for row in rows_of_teacher.get((slot, teacher_id), [])}
             if duty_rooms & set(allowed):
                 continue
-            if not allowed:
-                problems.add("own paper duty", f"{teacher_id} teaches {paper_id} "
-                                               f"({slot_text(slot)}), but every room in that "
-                                               f"slot holds their own students.")
-            else:
-                if duty_rooms:
-                    now = f"they are in {', '.join(sorted(duty_rooms))}"
-                else:
-                    now = "they have no duty then"
-                problems.add("own paper duty", f"{teacher_id} teaches {paper_id} "
-                                               f"({slot_text(slot)}) and needs a duty in one "
-                                               f"of {', '.join(allowed)}; {now}.")
+            report_own_paper_duty(teacher_id, paper_id, slot, allowed, duty_rooms, problems)
             reported.add((slot, teacher_id))
+
+
+def own_paper_rooms(paper_id, teaches, slot, rooms_in_slot, contents, papers_in_room):
+    """The rooms a teacher may take for paper_id in its slot: those with the
+    paper and none of their own students, or if there are none, those
+    without the paper and with none of their own students."""
+    with_paper = []
+    without_paper = []
+    for room_id in rooms_in_slot.get(slot, []):
+        if contents.get((slot, room_id), set()) & teaches:
+            continue
+        if paper_id in papers_in_room.get((slot, room_id), set()):
+            with_paper.append(room_id)
+        else:
+            without_paper.append(room_id)
+    if with_paper:
+        return with_paper
+    return without_paper
+
+
+def report_own_paper_duty(teacher_id, paper_id, slot, allowed, duty_rooms, problems):
+    if not allowed:
+        problems.add("own paper duty", f"{teacher_id} teaches {paper_id} ({slot_text(slot)}), "
+                                       f"but every room in that slot holds their own students.")
+        return
+    if duty_rooms:
+        now = f"they are in {', '.join(sorted(duty_rooms))}"
+    else:
+        now = "they have no duty then"
+    problems.add("own paper duty", f"{teacher_id} teaches {paper_id} ({slot_text(slot)}) and "
+                                   f"needs a duty in one of {', '.join(allowed)}; {now}.")
 
 
 if __name__ == "__main__":
