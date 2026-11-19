@@ -115,7 +115,9 @@ def clear_a_choice(selected, ask, show, current):
         show("Nothing is chosen yet.")
         return current
     choices.append(("Back", "back", None))
-    answer = ask("Clear which choice? Its file is not touched.", choices, choices[0][1])
+    # the first chosen input is highlighted
+    _, first_index, _ = choices[0]
+    answer = ask("Clear which choice? Its file is not touched.", choices, first_index)
     if answer is None or answer == "back":
         return current
     item = INPUTS[answer]

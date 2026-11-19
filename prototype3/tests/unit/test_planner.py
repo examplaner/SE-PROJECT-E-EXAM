@@ -18,12 +18,24 @@ def run_settings(folder):
     return ExamCalendar.from_settings(settings).effective_settings()
 
 
+def input_bytes(selected):
+    """{path: its bytes} for every picked file, to see that a run changes none."""
+    contents = {}
+    for key, path in selected.items():
+        if key == "students":
+            for roster in sorted(path.glob("*.csv")):
+                contents[roster] = roster.read_bytes()
+        else:
+            contents[path] = path.read_bytes()
+    return contents
+
+
 @pytest.fixture(scope="module")
 def realistic_plan(tmp_path_factory):
     """The realistic example's timetable, made once for the tests below."""
     output = tmp_path_factory.mktemp("output")
     selected = inputs_of(REALISTIC_DATASET)
-    before = planner.fingerprints(selected)
+    before = input_bytes(selected)
     plan = planner.generate_timetable(selected, run_settings(REALISTIC_DATASET), output)
     return plan, selected, before
 
@@ -50,7 +62,7 @@ def test_the_seating_passes_the_checker_and_each_yes_makes_a_new_folder(realisti
 
 def test_the_input_files_are_never_changed(realistic_plan):
     _, selected, before = realistic_plan
-    assert planner.fingerprints(selected) == before
+    assert input_bytes(selected) == before
 
 
 @pytest.mark.parametrize("dataset", [SMALL_DATASET, REALISTIC_DATASET])

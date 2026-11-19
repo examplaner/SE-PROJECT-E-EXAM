@@ -109,6 +109,11 @@ class Seat:
     student_id: str
 
 
+def row_of(seat):
+    """Sort key: front row first."""
+    return seat.row
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Check a plan folder against the rules.")
     parser.add_argument("input_dir", help="the input folder the plan was made from, "
@@ -216,7 +221,7 @@ def read_input_table(path, columns):
         raise CannotCheck(f"{path} can't be read ({error}).")
     if not lines:
         raise CannotCheck(f"{path} is empty.")
-    header = lines[0][1]
+    _, header = lines[0]
     missing = [column for column in columns if column not in header]
     if missing:
         raise CannotCheck(f"{path} has no column {', '.join(missing)}.")
@@ -349,7 +354,10 @@ def read_plan_table(folder, name, columns, sessions, problems):
     except (OSError, UnicodeDecodeError, csv.Error) as error:
         problems.add("output files", f"{name} can't be read ({error}).")
         return []
-    if not lines or lines[0][1] != columns:
+    header = []
+    if lines:
+        _, header = lines[0]
+    if header != columns:
         problems.add("output files", f"{name}: the header should be {','.join(columns)}.")
         return []
 
@@ -439,13 +447,14 @@ def read_room_file(path, where, size, problems):
                 grid_row.append(None)
                 continue
             parts = text.split(":")
-            if len(parts) != 2 or not parts[0] or not parts[1]:
+            if len(parts) != 2 or "" in parts:
                 problems.add("room cell", f"{where} row {row_number}, column {column_number}: "
                                           f"'{text}' should be PAPER:STUDENT or empty.")
                 good = False
                 grid_row.append(None)
                 continue
-            grid_row.append((parts[0], parts[1]))
+            paper_id, student_id = parts
+            grid_row.append((paper_id, student_id))
         grid.append(grid_row)
     if not good:
         return None
@@ -630,13 +639,14 @@ def check_gap(data, slot_of, doubtful, problems):
         papers = sorted(papers)
         for index, paper_a in enumerate(papers):
             for paper_b in papers[index + 1:]:
-                days = abs((slot_of[paper_a][0] - slot_of[paper_b][0]).days)
-                if days < data["gap"]:
+                day_a, _ = slot_of[paper_a]
+                day_b, _ = slot_of[paper_b]
+                if abs((day_a - day_b).days) < data["gap"]:
                     shared.setdefault((paper_a, paper_b), []).append(student_id)
 
     for (paper_a, paper_b), students in sorted(shared.items()):
-        day_a = slot_of[paper_a][0]
-        day_b = slot_of[paper_b][0]
+        day_a, _ = slot_of[paper_a]
+        day_b, _ = slot_of[paper_b]
         days = abs((day_a - day_b).days)
         problems.add("gap", f"{paper_a} ({day_a}) and {paper_b} ({day_b}) are {days} day(s) "
                             f"apart and share {len(students)} student(s), e.g. "
@@ -695,7 +705,7 @@ def column_rule_text(where, index, paper_id, seats):
              f"side by side."]
     for column in (index + 1, index + 2):
         seats_here = [seat for seat in seats if seat.column == column and seat.paper_id == paper_id]
-        seats_here.sort(key=lambda seat: seat.row)
+        seats_here.sort(key=row_of)
         rows_text = ", ".join(str(seat.row) for seat in seats_here)
         students = ", ".join(seat.student_id for seat in seats_here)
         word = "row" if len(seats_here) == 1 else "rows"
@@ -750,11 +760,14 @@ def check_roll_order(data, slot_of, good_seats, reported, problems):
     for seat in good_seats:
         seats_of_paper.setdefault(seat.paper_id, []).append(seat)
 
+    # rooms in rooms.csv order, then down each column, columns left to right
+    def in_seating_order(seat):
+        return (room_index[seat.room_id], seat.column, seat.row)
+
     for paper_id, slot in sorted(slot_of.items()):
         if (slot, paper_id) in reported:
             continue
-        seats = sorted(seats_of_paper.get(paper_id, []),
-                       key=lambda seat: (room_index[seat.room_id], seat.column, seat.row))
+        seats = sorted(seats_of_paper.get(paper_id, []), key=in_seating_order)
         for before, after in zip(seats, seats[1:]):
             if after.student_id <= before.student_id:
                 problems.add("roll order", f"{paper_id} on {slot_text(slot)}: "

@@ -328,7 +328,7 @@ def make_course_codes(design):
                 raise DesignError(f"{cohort['id']}: unknown subject {subject}")
             if (cohort["id"], subject) in codes:
                 raise DesignError(f"{cohort['id']}: subject {subject} listed twice")
-            department = SUBJECTS[subject][1]
+            _, department = SUBJECTS[subject]
             key = (department, cohort["year"])
             counters[key] = counters.get(key, 0) + 1
             codes[(cohort["id"], subject)] = f"{department}{cohort['year']}{counters[key]:03d}"
@@ -449,8 +449,11 @@ def assign_teachers(groups, teachers, rng):
         candidates = [teacher_id for teacher_id in faculty if subject not in papers_of[teacher_id]]
         if not candidates:
             raise DesignError(f"not enough teachers for paper {subject}")
-        # min() keeps the first teacher on a tie
-        teacher = min(candidates, key=lambda teacher_id: load[teacher_id])
+        # the teacher with the fewest papers so far; on a tie the first one
+        teacher = candidates[0]
+        for teacher_id in candidates[1:]:
+            if load[teacher_id] < load[teacher]:
+                teacher = teacher_id
         load[teacher] += 1
         papers_of[teacher].add(subject)
         assigned.append((teacher, subject, sections))
@@ -479,9 +482,11 @@ def make_course_rows(design, codes):
     rows = []
     for cohort in design["cohorts"]:
         for subject in cohort["cores"]:
-            rows.append([codes[(cohort["id"], subject)], SUBJECTS[subject][0], cohort["id"], "CORE"])
+            title, _ = SUBJECTS[subject]
+            rows.append([codes[(cohort["id"], subject)], title, cohort["id"], "CORE"])
         for subject in cohort["electives"]:
-            rows.append([codes[(cohort["id"], subject)], SUBJECTS[subject][0], cohort["id"], "ELECTIVE"])
+            title, _ = SUBJECTS[subject]
+            rows.append([codes[(cohort["id"], subject)], title, cohort["id"], "ELECTIVE"])
     return rows
 
 
@@ -543,7 +548,8 @@ def print_summary(design, codes, registrations, assigned, teachers):
     for subject in subjects_in_order(design):
         paper_codes = [code for _, code in codes_of_subject(codes, subject)]
         students = sum(students_per_code.get(code, 0) for code in paper_codes)
-        print(f"  {SUBJECTS[subject][0]:<40} {students:>8}  "
+        title, _ = SUBJECTS[subject]
+        print(f"  {title:<40} {students:>8}  "
               f"{len(teachers_per_subject.get(subject, [])):>8}  {', '.join(paper_codes)}")
 
     load = {}

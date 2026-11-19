@@ -101,30 +101,41 @@ def papers_short(papers, plans, exam):
 
 
 def fill_columns(grid, columns, paper_id, students):
-    """Seat students down each column, front to back. Seated students are
-    taken off the front of the list."""
+    """Seat students down each column, front to back. Returns the students
+    who got no seat in these columns."""
+    seated = 0
     for column in columns:
         for row in grid:
-            if not students:
-                return
-            row[column] = (paper_id, students.pop(0))
+            if seated == len(students):
+                return []
+            row[column] = (paper_id, students[seated])
+            seated += 1
+    return students[seated:]
 
 
 def seat_room(room, groups):
     """Fill one room. groups: one or two (paper_id, students); the first gets
-    the odd columns, the second the even columns."""
+    the odd columns, the second the even columns. Returns the RoomPlan and,
+    for each group, its students who got no seat here."""
     grid = []
     for _ in range(room.rows):
         grid.append([None] * room.columns)
 
     first_id, first_students = groups[0]
-    fill_columns(grid, room.odd_columns(), first_id, first_students)
+    left = [fill_columns(grid, room.odd_columns(), first_id, first_students)]
     papers = [first_id]
     if len(groups) == 2:
         second_id, second_students = groups[1]
-        fill_columns(grid, room.even_columns(), second_id, second_students)
+        left.append(fill_columns(grid, room.even_columns(), second_id, second_students))
         papers.append(second_id)
-    return RoomPlan(room.room_id, papers, grid)
+    return RoomPlan(room.room_id, papers, grid), left
+
+
+def most_students_first(group):
+    """Sort key for (paper_id, students): the most students first, ties by
+    paper ID."""
+    paper_id, students = group
+    return (-len(students), paper_id)
 
 
 def paper_queues(papers):
@@ -133,8 +144,21 @@ def paper_queues(papers):
     queues = []
     for paper in papers:
         queues.append((paper.paper_id, sorted(paper.students)))
-    queues.sort(key=lambda queue: (-len(queue[1]), queue[0]))
+    queues.sort(key=most_students_first)
     return queues
+
+
+def in_rooms_csv_order(items, rooms):
+    """items: Rooms or RoomPlans, at most one per room. Returns them in the
+    order of their rooms in rooms.csv."""
+    item_of = {}
+    for item in items:
+        item_of[item.room_id] = item
+    ordered = []
+    for room in rooms:
+        if room.room_id in item_of:
+            ordered.append(item_of[room.room_id])
+    return ordered
 
 
 def section_runs(students, section_of):
@@ -189,13 +213,13 @@ def seat_best(papers, exam, must_split):
                 for run in section_runs(students, exam.section_of):
                     groups.append((paper_id, run))
             else:
-                groups.append((paper_id, list(students)))
+                groups.append((paper_id, students))
 
         group_sizes = [len(students) for _, students in groups]
         chosen = room_mix.best_combination(group_sizes, sizes, available)
         if chosen is None:
             return None
-        rooms_of_group = hand_out_rooms(chosen, exam.rooms, sizes, position)
+        rooms_of_group = hand_out_rooms(chosen, exam.rooms, sizes)
 
         # a split paper whose sections' rooms are not in rooms.csv order would
         # break roll order: seat it straight on and search again
@@ -213,12 +237,12 @@ def seat_best(papers, exam, must_split):
 
     plans = []
     for (paper_id, students), rooms in zip(groups, rooms_of_group):
-        # seat_room() takes the seated students off the list, so each room
-        # starts where the last one stopped
+        # each room starts where the last one stopped
         for room in rooms:
-            plans.append(seat_room(room, [(paper_id, students)]))
-    plans.sort(key=lambda plan: position[plan.room_id])
-    return plans
+            plan, left = seat_room(room, [(paper_id, students)])
+            plans.append(plan)
+            students = left[0]
+    return in_rooms_csv_order(plans, exam.rooms)
 
 
 def papers_to_split(queues, section_of, sizes, available, must_split):
@@ -240,7 +264,7 @@ def papers_to_split(queues, section_of, sizes, available, must_split):
     return split
 
 
-def hand_out_rooms(chosen, rooms, sizes, position):
+def hand_out_rooms(chosen, rooms, sizes):
     """Real rooms for each group's option: the first free rooms of each size,
     in rooms.csv order. Returns one list of rooms per group."""
     free = {}
@@ -253,8 +277,7 @@ def hand_out_rooms(chosen, rooms, sizes, position):
         for count, size in zip(option, sizes):
             taken += free[size][:count]
             free[size] = free[size][count:]
-        taken.sort(key=lambda room: position[room.room_id])
-        rooms_of_group.append(taken)
+        rooms_of_group.append(in_rooms_csv_order(taken, rooms))
     return rooms_of_group
 
 
@@ -298,11 +321,13 @@ def seat_in_room_order(papers, exam):
             groups = runs
         else:
             groups = [students]
-        # seat_room() takes the seated students off the group, so each
-        # group ends when its list is empty
+        # each group starts in a new room and fills rooms until it is seated
         for group in groups:
-            while group:
-                plans.append(seat_room(rooms[room_index], [(paper_id, group)]))
+            waiting = group
+            while waiting:
+                plan, left = seat_room(rooms[room_index], [(paper_id, waiting)])
+                plans.append(plan)
+                waiting = left[0]
                 room_index += 1
     return plans
 
@@ -310,45 +335,50 @@ def seat_in_room_order(papers, exam):
 def seat_with_mixing(papers, rooms):
     """Way 3. Returns (RoomPlans, {paper_id: students still without a seat})."""
     plans = []
-    leftovers = []
+    # paper_id -> its students still without a seat
+    waiting = {}
     room_index = 0
 
-    # each paper first fills, alone, the rooms it fills completely;
-    # seat_room() takes the seated students off its list
+    # each paper first fills, alone, the rooms it fills completely
     for paper_id, students in paper_queues(papers):
         while room_index < len(rooms) and len(students) >= rooms[room_index].alone_seats():
-            plans.append(seat_room(rooms[room_index], [(paper_id, students)]))
+            plan, left = seat_room(rooms[room_index], [(paper_id, students)])
+            plans.append(plan)
+            students = left[0]
             room_index += 1
-        if students:
-            leftovers.append((paper_id, students))
+        waiting[paper_id] = students
 
     # the leftovers go into the rooms still free, biggest in the odd columns;
     # a second one joins in the even columns only if otherwise the leftovers
     # would not fit in the free rooms
     for index in range(room_index, len(rooms)):
-        leftovers = still_unseated(leftovers)
+        leftovers = still_unseated(waiting)
         if not leftovers:
             break
-        leftovers.sort(key=lambda leftover: (-len(leftover[1]), leftover[0]))
         room = rooms[index]
         free_rooms_after = len(rooms) - index - 1
         groups = [leftovers[0]]
         if len(leftovers) - 1 > free_rooms_after:
             groups.append(pick_partner(leftovers[1:], room))
-        plans.append(seat_room(room, groups))
+        plan, left = seat_room(room, groups)
+        plans.append(plan)
+        for (paper_id, _), students in zip(groups, left):
+            waiting[paper_id] = students
 
     unseated = {}
-    for paper_id, students in still_unseated(leftovers):
+    for paper_id, students in still_unseated(waiting):
         unseated[paper_id] = students
     return plans, unseated
 
 
-def still_unseated(leftovers):
-    """The (paper_id, students) leftovers that still have students."""
+def still_unseated(waiting):
+    """(paper_id, students) for each paper that still has students without a
+    seat, the most students first."""
     left = []
-    for paper_id, students in leftovers:
+    for paper_id, students in waiting.items():
         if students:
             left.append((paper_id, students))
+    left.sort(key=most_students_first)
     return left
 
 
@@ -372,7 +402,7 @@ def join_leftovers(plans, papers, exam):
     for room in exam.rooms:
         room_of[room.room_id] = room
     position = positions(exam.rooms)
-    plans = sorted(plans, key=lambda plan: position[plan.room_id])
+    plans = in_rooms_csv_order(plans, exam.rooms)
     if papers_short(papers, plans, exam):
         return plans
 
@@ -384,7 +414,8 @@ def join_leftovers(plans, papers, exam):
         if choice is None:
             return plans
         first_id, second_id, shared = choice
-        joined = seat_room(room_of[shared.room_id], [
+        # best_join() only picks a room both leftovers fit in, so nobody is left
+        joined, _ = seat_room(room_of[shared.room_id], [
             (first_id, students_of(leftovers[first_id], first_id)),
             (second_id, students_of(leftovers[second_id], second_id))])
         trial = []
@@ -392,7 +423,7 @@ def join_leftovers(plans, papers, exam):
             if plan is not leftovers[first_id] and plan is not leftovers[second_id]:
                 trial.append(plan)
         trial.append(joined)
-        trial.sort(key=lambda plan: position[plan.room_id])
+        trial = in_rooms_csv_order(trial, exam.rooms)
         if papers_short(papers, trial, exam):
             refused.add((first_id, second_id))
         else:
@@ -406,8 +437,11 @@ def students_of(plan, paper_id):
     for column in range(len(plan.grid[0])):
         for row in plan.grid:
             cell = row[column]
-            if cell and cell[0] == paper_id:
-                students.append(cell[1])
+            if cell is None:
+                continue
+            cell_paper, student_id = cell
+            if cell_paper == paper_id:
+                students.append(student_id)
     return students
 
 
@@ -438,7 +472,10 @@ def best_join(plans, leftovers, room_of, position, refused):
     size = {}
     for paper_id, plan in leftovers.items():
         size[paper_id] = len(students_of(plan, paper_id))
-    order = sorted(leftovers, key=lambda paper_id: (-size[paper_id], paper_id))
+
+    def bigger_first(paper_id):
+        return (-size[paper_id], paper_id)
+    order = sorted(leftovers, key=bigger_first)
 
     best_rank = None
     best_choice = None

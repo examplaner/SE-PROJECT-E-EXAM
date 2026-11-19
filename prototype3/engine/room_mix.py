@@ -100,8 +100,11 @@ def best_combination(group_sizes, sizes, available):
                     seats += count * size
                 score = (rooms + sum(option), empty + seats - students)
                 # on a tie the way found first stays
-                if now_used not in next_best or score < next_best[now_used][0]:
-                    next_best[now_used] = (score, chosen + [option])
+                if now_used in next_best:
+                    best_score, _ = next_best[now_used]
+                    if score >= best_score:
+                        continue
+                next_best[now_used] = (score, chosen + [option])
         if not next_best or len(next_best) > MAX_STATES:
             return None
         best_for = next_best

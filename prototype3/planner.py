@@ -7,7 +7,6 @@ The timetable is written first; the seating and duties only after the second
 yes. Each part is checked by the engine's own checker before it is shown.
 """
 
-import hashlib
 import json
 import sys
 import tempfile
@@ -108,36 +107,16 @@ def is_safe_file_name(name):
     return name.split(".")[0].upper() not in RESERVED_NAMES
 
 
-def fingerprints(selected):
-    """{path: SHA-256 of its bytes} for every picked file, so the run records
-    exactly what it was made from."""
-    paths = []
-    for key, path in selected.items():
-        if key != "students":
-            paths.append(Path(path))
-    paths += sorted(Path(selected["students"]).glob("*.csv"))
-    result = {}
-    for path in paths:
-        result[str(path.resolve())] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return result
-
-
 def generate_timetable(selected, settings, output_root=OUTPUT):
     """Make the whole plan, then write and check only the timetable. Returns a
     Plan. Raises NoPlan, InputProblem, or RuntimeError if the timetable could
     not be written and checked."""
-    try:
-        before = fingerprints(selected)
-    except OSError as error:
-        raise InputProblem(f"An input file can't be read: {error}") from error
     exam = build_exam(load_selected(selected, settings))
     placements, way, failed = schedule.make_schedule(exam)
     if not placements:
         raise NoPlan("No plan possible.\nRule: papers\nThere are no papers to schedule.")
     seating = seat.make_seating(placements, exam)
     duty_rows = duties.make_duties(seating, exam)
-    if fingerprints(selected) != before:
-        raise InputProblem("An input file changed during planning. Check the inputs and try again.")
     basis = [schedule.basis_line(way, failed), seat.basis_line(seating)]
 
     folder = new_run_folder(output_root)
@@ -145,8 +124,7 @@ def generate_timetable(selected, settings, output_root=OUTPUT):
         # this run's settings and the files it was made from, beside the plan
         with open(folder / "settings.yaml", "x", encoding="utf-8") as file:
             yaml.safe_dump(settings, file, sort_keys=False)
-        sources = {"paths": {key: str(Path(path).resolve()) for key, path in selected.items()},
-                   "sha256": before}
+        sources = {key: str(Path(path).resolve()) for key, path in selected.items()}
         with open(folder / "sources.json", "x", encoding="utf-8") as file:
             json.dump(sources, file, indent=2)
 

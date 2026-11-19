@@ -8,6 +8,7 @@ out marked as no-exam days, and any day in the range can be switched.
 import calendar
 import copy
 import datetime
+import functools
 import tkinter
 from dataclasses import dataclass, field
 from tkinter import ttk
@@ -92,8 +93,9 @@ class CalendarDialog:
         else:
             self.root.title("No-exam days")
         self.root.resizable(False, False)
-        self.root.protocol("WM_DELETE_WINDOW", lambda: self.finish("back"))
-        self.root.bind("<Escape>", lambda event: self.finish("back"))
+        # closing the window with its X, or pressing Escape, goes back
+        self.root.protocol("WM_DELETE_WINDOW", self.go_back)
+        self.root.bind("<Escape>", self.go_back)
         self.month = tkinter.IntVar(value=exam_calendar.start.month)
         self.year = tkinter.IntVar(value=exam_calendar.start.year)
         # which end of the range the next click sets
@@ -121,7 +123,7 @@ class CalendarDialog:
 
         navigation = ttk.Frame(frame)
         navigation.pack(fill="x", pady=12)
-        ttk.Button(navigation, text="<", width=4, command=lambda: self.move(-1)).pack(side="left")
+        ttk.Button(navigation, text="<", width=4, command=self.previous_month).pack(side="left")
         ttk.Label(navigation, text="Month").pack(side="left", padx=(8, 3))
         ttk.Spinbox(navigation, from_=1, to=12, width=4,
                     textvariable=self.month).pack(side="left")
@@ -129,16 +131,15 @@ class CalendarDialog:
         ttk.Spinbox(navigation, from_=1, to=9999, width=6,
                     textvariable=self.year).pack(side="left")
         ttk.Button(navigation, text="Show", command=self.redraw).pack(side="left", padx=8)
-        ttk.Button(navigation, text=">", width=4, command=lambda: self.move(1)).pack(side="right")
+        ttk.Button(navigation, text=">", width=4, command=self.next_month).pack(side="right")
 
         self.grid = ttk.Frame(frame)
         self.grid.pack()
         ttk.Label(frame, textvariable=self.status, wraplength=480).pack(fill="x", pady=12)
         actions = ttk.Frame(frame)
         actions.pack(fill="x")
-        ttk.Button(actions, text="Back", command=lambda: self.finish("back")).pack(side="left")
-        ttk.Button(actions, text="Continue",
-                   command=lambda: self.finish("continue")).pack(side="right")
+        ttk.Button(actions, text="Back", command=self.go_back).pack(side="left")
+        ttk.Button(actions, text="Continue", command=self.go_on).pack(side="right")
 
     def shown_month(self):
         """(year, month) typed in the boxes, or None if they are not a month."""
@@ -213,8 +214,27 @@ class CalendarDialog:
             cell.configure(background="#a32929", foreground="white")
         elif self.mode == "range" and inside:
             cell.configure(background="#245a81", foreground="white")
-        cell.bind("<Button-1>", lambda event: self.select(day))
+        # partial() fixes this cell's day now; Tkinter adds the click event
+        # when it calls click_day()
+        cell.bind("<Button-1>", functools.partial(self.click_day, day))
         return cell
+
+    # Tkinter calls a button's command with nothing, and a key's or a click's
+    # handler with the event, which these don't need
+    def go_back(self, event=None):
+        self.finish("back")
+
+    def go_on(self):
+        self.finish("continue")
+
+    def previous_month(self):
+        self.move(-1)
+
+    def next_month(self):
+        self.move(1)
+
+    def click_day(self, day, event):
+        self.select(day)
 
     def finish(self, action):
         if self.state.start > self.state.end:

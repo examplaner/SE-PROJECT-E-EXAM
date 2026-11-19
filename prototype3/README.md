@@ -62,7 +62,7 @@ kept. Input files are only read. Each run gets a new folder under `output/`:
 ```
 output/2026-11-19_10-15-00_x1y2z3/
 ├── settings.yaml        the settings of this run, with the dates from the calendars
-├── sources.json         the input files used, with a fingerprint (SHA-256) of each
+├── sources.json         the paths of the input files used
 ├── timetable/           schedule.csv, basis.txt and terms.md
 └── seating_x4y5z6/      the full plan, as the command line writes it (below)
 ```

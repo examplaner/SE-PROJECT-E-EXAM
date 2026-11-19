@@ -92,6 +92,16 @@ def basis_line(way, failed):
     return line
 
 
+def biggest_first(paper):
+    """Sort key: the most students first, ties by paper ID."""
+    return (-len(paper.students), paper.paper_id)
+
+
+def size_then_id(paper):
+    """Sort key: the number of students, then the paper ID."""
+    return (len(paper.students), paper.paper_id)
+
+
 def build_clashes(papers):
     """{paper_id: set of the paper_ids that share a student with it}."""
     papers_of_student = {}
@@ -152,7 +162,8 @@ def check_before_scheduling(exam):
     # a paper alone can't use neighbouring columns, so one paper per room is
     # the most seats it can ever get in one session
     if exam.papers:
-        biggest = max(exam.papers.values(), key=lambda paper: (len(paper.students), paper.paper_id))
+        # on a tie in size, the paper with the highest ID
+        biggest = max(exam.papers.values(), key=size_then_id)
         limit = seat_limit(exam.rooms)
         if len(biggest.students) > limit:
             if len(exam.rooms) == 1:
@@ -204,7 +215,16 @@ class Timetable:
     def place(self, paper, slot):
         self.papers_in[slot].append(paper)
         self.students_in[slot] += len(paper.students)
-        self.date_of[paper.paper_id] = slot[0]
+        day, _ = slot
+        self.date_of[paper.paper_id] = day
+
+    def emptiest(self, slots):
+        """The slot with the fewest students; on a tie the first one."""
+        best = slots[0]
+        for slot in slots[1:]:
+            if self.students_in[slot] < self.students_in[best]:
+                best = slot
+        return best
 
     def check(self, slot, extra):
         """check_session() for the slot's papers plus the list `extra`."""
@@ -251,7 +271,7 @@ def place_papers(way, exam, clashes, checked):
     """Place every paper, choosing each paper's session in one way. Returns
     the sorted Placements, or raises NoPlan."""
     timetable = Timetable(exam, checked)
-    order = sorted(exam.papers.values(), key=lambda paper: (-len(paper.students), paper.paper_id))
+    order = sorted(exam.papers.values(), key=biggest_first)
     for paper in order:
         free_days = timetable.free_days(paper, clashes)
         slot = waiting_slot_fixed_by(paper, free_days, timetable)
@@ -267,8 +287,11 @@ def place_papers(way, exam, clashes, checked):
 
     placements = []
     for (day, session), papers in timetable.papers_in.items():
-        for paper in sorted(papers, key=lambda paper: paper.paper_id):
-            placements.append(Placement(day, session, paper))
+        paper_of_id = {}
+        for paper in papers:
+            paper_of_id[paper.paper_id] = paper
+        for paper_id in sorted(paper_of_id):
+            placements.append(Placement(day, session, paper_of_id[paper_id]))
     return placements
 
 
@@ -290,8 +313,7 @@ def choose_slot(way, paper, free_days, timetable):
             day_slots = [(day, session) for session in sessions]
             fitting = [slot for slot in day_slots if timetable.problem(slot, [paper]) is None]
             if fitting:
-                # min() keeps the first session on a tie
-                return min(fitting, key=lambda slot: timetable.students_in[slot])
+                return timetable.emptiest(fitting)
             for slot in day_slots:
                 if timetable.can_wait_in(slot, paper):
                     return slot
@@ -303,7 +325,15 @@ def choose_slot(way, paper, free_days, timetable):
             slots.append((day, session))
     fitting = [slot for slot in slots if timetable.problem(slot, [paper]) is None]
     if fitting:
-        return min(fitting, key=lambda slot: slot_rank(way, slot, paper, timetable))
+        # the lowest rank; on a tie the first slot
+        best = None
+        best_rank = None
+        for slot in fitting:
+            rank = slot_rank(way, slot, paper, timetable)
+            if best_rank is None or rank < best_rank:
+                best = slot
+                best_rank = rank
+        return best
     for slot in slots:
         if timetable.can_wait_in(slot, paper):
             return slot
@@ -353,9 +383,10 @@ def still_waiting(slot, papers, exam):
     missing = duties.teachers_without_room(papers, plans, exam)
     names = ", ".join(f"{teacher} ({paper_id})" for teacher, paper_id in missing)
     paper_ids = ", ".join(paper.paper_id for paper in papers)
+    day, session = slot
     return NoPlan("No plan possible.\n"
                   "Rule: duty room\n"
-                  f"Slot: {slot[0]} {slot[1]}\n"
+                  f"Slot: {day} {session}\n"
                   f"Papers: {paper_ids}. No other paper could join this slot, so these "
                   f"teachers have no room they may invigilate for their paper: {names}.")
 
@@ -367,5 +398,10 @@ def fullest_session(placements, exam):
     for placement in placements:
         slot = (placement.date, placement.session)
         students_in[slot] = students_in.get(slot, 0) + len(placement.paper.students)
-    (day, session), students = max(students_in.items(), key=lambda item: item[1])
-    return day, session, students, seat_limit(exam.rooms)
+    # the most students; on a tie the first slot
+    fullest = None
+    for slot, students in students_in.items():
+        if fullest is None or students > students_in[fullest]:
+            fullest = slot
+    day, session = fullest
+    return day, session, students_in[fullest], seat_limit(exam.rooms)

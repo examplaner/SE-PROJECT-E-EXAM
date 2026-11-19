@@ -29,8 +29,10 @@ def room_contents(plans, section_of):
         pairs = set()
         for row in plan.grid:
             for cell in row:
-                if cell:
-                    pairs.add((cell[0], section_of[cell[1]]))
+                if cell is None:
+                    continue
+                paper_id, student_id = cell
+                pairs.add((paper_id, section_of[student_id]))
         contents[plan.room_id] = pairs
     return contents
 
@@ -103,9 +105,12 @@ def make_duties(seating, exam):
     # teacher_id -> dates with a duty
     days_worked = {}
 
+    def in_time_order(slot):
+        day, session = slot
+        return (day, exam.sessions.index(session))
+
     rows = []
-    slots = sorted(seating, key=lambda slot: (slot[0], exam.sessions.index(slot[1])))
-    for day, session in slots:
+    for day, session in sorted(seating, key=in_time_order):
         teachers_in = staff_slot(day, session, seating[(day, session)], exam,
                                  regulars, phds, counts, days_worked)
         for room_id, teacher_ids in teachers_in.items():
@@ -124,9 +129,11 @@ def staff_slot(day, session, plans, exam, regulars, phds, counts, days_worked):
     for plan in plans:
         teachers_in[plan.room_id] = []
 
+    def fewest_rooms_first(teacher_id):
+        return (len(own_paper[teacher_id]), teacher_id)
+
     # 1. own-paper duties, the teachers with the fewest rooms first
-    for teacher_id in sorted(own_paper, key=lambda teacher_id: (len(own_paper[teacher_id]),
-                                                                teacher_id)):
+    for teacher_id in sorted(own_paper, key=fewest_rooms_first):
         if not place_teacher(teacher_id, teachers_in, exam.per_room, may_sit, set()):
             rooms = []
             for room_id in teachers_in:
